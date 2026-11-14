@@ -235,7 +235,7 @@ dump = json.dumps(svc.db.execute("SELECT * FROM seen").fetchall() + svc.db.execu
 assert "1.1.1.1" not in dump and "2.2.2.2" not in dump
 import http.client as _hc
 c = _hc.HTTPConnection("127.0.0.1", httpd.server_address[1]); c.request("GET", "/api/download", headers={"User-Agent": UA})
-r = c.getresponse(); r.read(); assert r.status == 302 and r.getheader("Location") == "/download/RetroCompanion.exe"
+r = c.getresponse(); r.read(); assert r.status == 302 and r.getheader("Location") == SRV.DOWNLOAD and "github.com" in SRV.DOWNLOAD
 c.request("GET", "/api/admin/stats", headers={"Authorization": "Bearer admin-test-pass"}); r = c.getresponse()
 assert r.status == 200 and json.loads(r.read())["total"]["downloads"] == 2; c.close()
 del os.environ["RC_ADMIN"]

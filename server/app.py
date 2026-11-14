@@ -15,7 +15,7 @@ behind a reverse proxy that does HTTPS (see deploy/). Everything is JSON under /
     POST   /api/account/delete  {password}                    (token) removes the account and its data
     GET    /api/health
     POST   /api/hit             {page, ref}                   counts a page view (no address is stored)
-    GET    /api/download                                      counts a download, redirects to the file
+    GET    /api/download                                      counts a download, redirects to the release page
     GET    /api/admin/stats                                   (admin password as the token) -> visits, sources, downloads
 
 The token goes in "Authorization: Bearer <token>". Passwords are stored as scrypt hashes,
@@ -67,7 +67,8 @@ LIMITS = {"auth": (10, 600), "register": (5, 3600), "reset": (5, 3600), "sync": 
 PAGES = {"/": "/", "/index.html": "/", "/support": "/support", "/support.html": "/support",
          "/privacy": "/privacy", "/privacy.html": "/privacy"}
 GUIDE_RE = re.compile(r"^/guides(/[a-z0-9-]{1,80})?$")
-DOWNLOAD = "/download/RetroCompanion.exe"
+# the program is downloaded from its GitHub release page; this site hosts no executable
+DOWNLOAD = os.environ.get("RC_DOWNLOAD", "https://github.com/Dieer2/RetroCompanion/releases/latest")
 BOT_RE = re.compile(r"bot|crawl|spider|slurp|preview|monitor|curl|wget|python|headless|scan|fetch|lighthouse|^retrocompanion|^$", re.I)
 OWN_HOSTS = ("dieergames.hu",)
 
