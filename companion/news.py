@@ -7,12 +7,12 @@ something on the website.
 """
 
 NEWS = [
-    dict(date="2026-11-14", title="Version 0.10", items=[
+    dict(date="2026-11-14", title="Version 0.10.1", items=[
         "The figures in the item and spell tips are now read from the game's own code: Herb 23 to 30 HP, HEAL "
         "10 to 17, HEALMORE 85 to 100, HURT 5 to 12, HURTMORE 58 to 65, a Torch lights 3 by 3 tiles and "
         "RADIANT 7 by 7, REPEL and Fairy Water last 127 steps, swamp costs 2 HP a step and a barrier 15",
         "New in the tips: Erdrick's Armor also stops an enemy's STOPSPELL, Magic Armor does not weaken fire "
-        "breath, and the Fighter's Ring does nothing at all",
+        "breath, and the Fighter's Ring does nothing for your stats",
         "The battle window tells how much damage the enemy's spell or fire breath does, in the armor you wear",
     ]),
     dict(date="2026-11-14", title="Version 0.9", items=[

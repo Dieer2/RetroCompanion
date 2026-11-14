@@ -147,7 +147,9 @@ CODE_FACTS = [
     (0xE749, "2907 18 6905", "HURT: random 0-7 plus 5 = 5 to 12 damage"),
     (0xE764, "2907 18 693A", "HURTMORE: random 0-7 plus 58 = 58 to 65 damage"),
     (0xCCFA, "C91C F00C C918 D02E", "Erdrick's Armor heals on every step, Magic Armor goes on to a step counter"),
+    # the flag (bit $20 of $CF) is read in one more place in the whole ROM: $D2BF, a townsman's dialog
     (0xDFD1, "A5CF 2920 D00B A5CF 0920 85CF", "Fighter's Ring: putting it on only sets a flag"),
+    (0xD2BF, "A5CF 2920", "Fighter's Ring: the townsman who remarks on it"),
     (0xCD06, "2903", "Magic Armor: 1 HP on every 4th step"),
     (0xCDD0, "C91C", "swamp: no damage in Erdrick's Armor"),
     (0xCDE1, "38 E902", "swamp: 2 HP a step"),
@@ -203,7 +205,8 @@ ITEM_NOTES = {
     "Dragon's Scale": ["Defense +2 once you USE it", "Wear it right after buying"],
     "Fairy Flute": ["Puts the Golem at Cantlin's gate to sleep (use it in the battle)",
                     "Found in Kol: SEARCH 4 tiles south of the bath"],
-    "Fighter's Ring": ["No effect: the game sets a flag when you put it on, and nothing ever reads it",
+    "Fighter's Ring": ["No effect on your stats: putting it on sets a flag, and the only thing that reads it "
+                       "is one townsman's line",
                        "Chest in the Mountain Cave, B2"],
     "Erdrick's Token": ["Proof that you are Erdrick's heir", "One of the three things the Southern Shrine asks for",
                         "Found in the swamp 70 south, 40 east of Tantegel"],
