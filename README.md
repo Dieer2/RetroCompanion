@@ -46,6 +46,7 @@ window (the shortcuts are left alone in every other program, and when no overlay
 | S | my stats on/off |
 | L | location notes on/off |
 | H | collapse / expand every module |
+| C | compact / full size, every module |
 
 ## Overlay modules
 
@@ -56,6 +57,11 @@ The achievements module lists every achievement of the game one group at a time,
 still open; the arrows in its header page through the groups. The log shows what happened,
 newest first: enemies beaten, levels gained, items found, steps finished, achievements earned.
 It is kept on this computer. Both lists scroll with the mouse wheel.
+
+Every module has a **compact form**: the two chevrons in its header shrink it to one
+strip with an icon and the main figures (the step, your HP and gold, the enemy's HP bar, a
+small map, the latest log line), so the overlay covers little of the game. The button at the
+end of the strip, or a double-click, brings the full module back. C switches all of them.
 
 Each module can be
 

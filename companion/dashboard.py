@@ -21,7 +21,7 @@ from .store import Store
 from . import theme as T
 
 HOTKEYS = {0x27: "next", 0x25: "prev", 0x44: "done", 0x48: "hide", 0x41: "auto", 0x4C: "loc",
-           0x4D: "map", 0x53: "self", 0x5A: "zoom"}
+           0x4D: "map", 0x53: "self", 0x5A: "zoom", 0x43: "compact"}
 
 
 LOG_KEEP = 300                    # log lines kept per game (this computer only, not synced)

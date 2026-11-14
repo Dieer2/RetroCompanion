@@ -1176,6 +1176,7 @@ class DragonWarrior(GamePlugin):
         loc = MAPS.get(g.map, "?")
         v["location"] = loc + ("  (%s)" % rel_tant(g.x, g.y) if g.map == 0x01 else "  (%d,%d)" % (g.x, g.y))
         v["stats"], v["gear"], v["self"] = stats_line(g), gear_line(g), self_lines(g) + [self.run_line()]
+        v["short"] = {"stats": "Lv %d  HP %d/%d  MP %d/%d  G %d" % (g.level, g.hp, g.maxhp, g.mp, g.maxmp, g.gold)}
         if g.in_battle:
             if not self._fight or self._fight[0] != g.en_id or g.en_hp > self._fight[1]:
                 self._fight = (g.en_id, g.en_hp)
@@ -1183,6 +1184,9 @@ class DragonWarrior(GamePlugin):
             hp = "HP %d / %d" % (g.en_hp, mx) if g.en_hp > 0 else "defeated"
             v["battle"] = {"title": "%s   %s" % (ENEMIES[g.en_id].upper(), hp),
                            "frac": g.en_hp / float(mx), "lines": battle_lines(g, mx)}
+            if g.en_stats:
+                v["battle"]["short"] = "you hit %d-%d · it hits %d-%d" % (
+                    hero_damage(g.atk, g.en_stats[1]) + enemy_damage(g.en_stats[0], g.dfn))
         else:
             self._fight = None
         W = self.world
@@ -1193,6 +1197,10 @@ class DragonWarrior(GamePlugin):
                        "No walkable route found from here (a key, the Rainbow Bridge or the hidden "
                        "stairs may be missing).")
         v["nav"] = nav
+        if goal and W and path:                 # the compact guide: the route's length, or the compass line
+            v["short"]["nav"] = nav[-1].split(" · ")[0]
+        elif nav[0]:
+            v["short"]["nav"] = nav[0]
         warn = []
         rec = step.get("rec")
         if rec and g.level < rec:

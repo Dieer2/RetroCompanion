@@ -15,6 +15,10 @@ The overlay is a set of modules, each its own small always-on-top window:
     ach      every achievement of the game, one group at a time, earned or still open
     log      what happened, newest first: enemies beaten, levels, items, steps, achievements
 
+Every module has a compact form (the two chevrons in its header, or C for all of them): no
+header, one strip with an icon and the main figures, so the game stays visible. The button
+at the end of the strip, or a double-click on it, brings the full module back.
+
 Every module can be collapsed (arrow in its header), resized (drag its right edge for the
 width, its bottom edge for the height, the corner for both; text re-wraps, the map rescales
 to fit) and moved (drag its header). Height follows the content until it is set by hand;
@@ -31,6 +35,7 @@ from . import theme as T
 from .profile import grade
 
 WIDTH = 380            # default module width
+CWIDTH = 280           # default width of a module in its compact form
 PAD = T.S3             # inner padding of a module
 GAP = T.S2             # space between docked modules
 ORDER = ("guide", "toast", "hero", "tracker", "battle", "map", "notes", "ach", "log")
@@ -141,14 +146,15 @@ class MapView:
 
 class Panel:
     """One module window: header (drag to move), body rows, right edge (drag to resize)."""
-    MINW, MAXW, MINH = 240, 720, 72
+    MINW, MAXW, MINH, CMINW = 240, 720, 72, 170
 
     def __init__(self, ov, name, tools=(), with_dot=False, limit=None):
         tk = self.tk = ov.tk
         self.ov, self.name = ov, name
         self.limit = limit          # a height the content may grow to before it scrolls (None: no limit)
         self.cfg = ov.ui.setdefault("panels", {}).setdefault(name, {})
-        self.w = max(self.MINW, min(self.MAXW, int(self.cfg.get("w", WIDTH))))
+        self.compact = bool(self.cfg.get("compact", False))
+        self.w = self.width()
         self.collapsed = bool(self.cfg.get("collapsed", False))
         self.shown = False
         self._key = self._geom = None
@@ -176,6 +182,8 @@ class Panel:
         T.IconButton(tk, head, "close", self.close).c.pack(side="right", padx=(0, T.S2), pady=T.S1)
         self.fold = T.IconButton(tk, head, "up", self.toggle_collapse)
         self.fold.c.pack(side="right", pady=T.S1)
+        if name != "toast":
+            T.IconButton(tk, head, "compact", self.toggle_compact).c.pack(side="right", pady=T.S1)
         self.tools = {}
         for icon, act in reversed(tools):
             self.tools[act] = T.IconButton(tk, head, icon, lambda a=act: ov.action(a))
@@ -187,6 +195,13 @@ class Panel:
         self.view.create_window(0, 0, window=self.body, anchor="nw", tags="b")
         self.bar = tk.Canvas(self.body, height=6, bg=T.RAISED, highlightthickness=0)
         self.mapv = MapView(tk, self.body)
+        # the compact form: no header, one strip (icon, the main figures, a button back to full size)
+        self.strip = tk.Frame(self.body, bg=T.CARD)
+        self.sicon = tk.Canvas(self.strip, width=20, height=20, bg=T.CARD, highlightthickness=0)
+        self.sicon.pack(side="left", anchor="n", pady=2)
+        T.IconButton(tk, self.strip, "expand", self.toggle_compact).c.pack(side="right", anchor="n")
+        self.stext = tk.Label(self.strip, bg=T.CARD, fg=T.TEXT, justify="left", anchor="w")
+        self.stext.pack(side="left", fill="x", expand=True, padx=(T.S2, 0), pady=2)
         self.h = self.body_h = self.view_h = 0
 
         # resize handles: right edge = width, bottom edge = height, corner = both
@@ -206,13 +221,16 @@ class Panel:
         win.bind("<MouseWheel>", lambda e: self.scroll(-1 if e.delta > 0 else 1))
         win.bind("<Button-4>", lambda e: self.scroll(-1))
         win.bind("<Button-5>", lambda e: self.scroll(1))
-        for w in (head, self.title) + ((self.dot,) if self.dot else ()):
+        for w in (head, self.title, self.strip, self.sicon, self.stext) + ((self.dot,) if self.dot else ()):
             w.bind("<ButtonPress-1>", self.drag_start)
             w.bind("<B1-Motion>", self.drag_move)
             w.bind("<ButtonRelease-1>", self.drag_end)
+        for w in (self.strip, self.sicon, self.stext):
+            w.bind("<Double-Button-1>", lambda e: self.toggle_compact())
         win.bind("<Button-3>", lambda e: ov.menu.tk_popup(e.x_root, e.y_root))
         for key, act in (("<Right>", "next"), ("<Left>", "prev"), ("d", "done"), ("h", "hide"), ("a", "auto"),
-                         ("l", "loc"), ("m", "map"), ("s", "self"), ("z", "zoom"), ("<Escape>", "auto")):
+                         ("l", "loc"), ("m", "map"), ("s", "self"), ("z", "zoom"), ("c", "compact"),
+                         ("<Escape>", "auto")):
             win.bind(key, lambda e, a=act: ov.action(a))
 
     # -- state -----------------------------------------------------------------
@@ -223,6 +241,20 @@ class Panel:
 
     def close(self):
         self.ov.action({"guide": "quit", "toast": "toast_next"}.get(self.name) or TOGGLE[self.name])
+
+    def width(self):
+        """Full size and compact keep their own widths."""
+        key, default, low = ("cw", CWIDTH, self.CMINW) if self.compact else ("w", WIDTH, self.MINW)
+        return max(low, min(self.MAXW, int(self.cfg.get(key, default))))
+
+    def set_compact(self, value):
+        self.compact = self.cfg["compact"] = bool(value)
+        self.w = self.width()
+        self.ov.save_ui()
+
+    def toggle_compact(self):
+        self.set_compact(not self.compact)
+        self.ov.render(force=True)
 
     def toggle_collapse(self):
         self.set_collapsed(not self.collapsed)
@@ -255,11 +287,11 @@ class Panel:
         mode, x0, y0, w0, h0 = self._size
         changed = False
         if "w" in mode:
-            w = max(self.MINW, min(self.MAXW, w0 + e.x_root - x0))
+            w = max(self.CMINW if self.compact else self.MINW, min(self.MAXW, w0 + e.x_root - x0))
             if w != self.w:
-                self.w = self.cfg["w"] = w
+                self.w = self.cfg["cw" if self.compact else "w"] = w
                 changed = True
-        if "h" in mode and not self.collapsed:
+        if "h" in mode and not self.collapsed and not self.compact:
             h = max(self.MINH, min(self.win.winfo_screenheight(), h0 + e.y_root - y0))
             if h != self.cfg.get("h"):
                 self.cfg["h"] = h
@@ -291,16 +323,20 @@ class Panel:
             self._labels.append(lbl)
         return self._labels[i]
 
-    def set(self, title, rows, dot=None):
-        """rows: [R(...)]; an empty list hides the module."""
+    def set(self, title, rows, dot=None, short=None):
+        """rows: [R(...)]; an empty list hides the module. short = (icon, text, rows, tint) is the
+        compact form: one strip with an icon and the main figures, then at most a row or two."""
         if not rows:
             self.hide()
             return
         ov = self.ov
+        small = self.compact and short is not None
+        if small:
+            icon, text, rows, tint = short
         sig = tuple((k, MapView.sig(v) if k == "map" else v, g, a) for k, v, g, a in rows)
-        fixed = self.cfg.get("h") or None
-        cap = self.limit if "h" not in self.cfg else None       # no height chosen yet: the content up to the limit
-        key = (title, sig, dot, self.w, fixed, self.collapsed, ov.fsize)
+        fixed = None if small else (self.cfg.get("h") or None)
+        cap = None if small or "h" in self.cfg else self.limit     # no height chosen yet: the content up to the limit
+        key = (title, sig, dot, self.w, fixed, self.collapsed, ov.fsize, (icon, text, tint) if small else None)
         if key != self._key:
             self._key = key
             n = ov.fsize
@@ -308,24 +344,37 @@ class Panel:
                       "strong": (T.TEXT, (T.FONT, n)), "title": (T.TEXT, (T.FONT, n + 3)),
                       "mono": (T.TEXT, (T.MONO, n)), "warn": (T.NEG, (T.FONT, n)),
                       "link": (T.MUTED, (T.FONT, n - 1, "underline"))}
-            self.title.configure(text=title, font=(T.FONT, n))
-            if self.dot is not None and dot:
-                self.dot.itemconfigure("d", fill=dot)
-            self.fold.set("down" if self.collapsed else "up")
             for wdg in self.body.winfo_children():
                 wdg.pack_forget()
+            self.head.pack_forget()
             self.sep.pack_forget()
             self.view.pack_forget()
-            self.win.update_idletasks()
-            head_h = self.head.winfo_reqheight()
-            chrome = 2 + head_h + 1 + T.S2 + PAD            # everything in the window except the body
+            if small:
+                head_h, chrome = 0, 2 + 2 * T.S1
+            else:
+                self.title.configure(text=title, font=(T.FONT, n))
+                if self.dot is not None and dot:
+                    self.dot.itemconfigure("d", fill=dot)
+                self.fold.set("down" if self.collapsed else "up")
+                self.head.pack(fill="x")
+                self.win.update_idletasks()
+                head_h = self.head.winfo_reqheight()
+                chrome = 2 + head_h + 1 + T.S2 + PAD            # everything in the window except the body
             self.h = 2 + head_h
-            if not self.collapsed:
+            if small or not self.collapsed:
                 wrap = self.w - 2 - 2 * PAD
                 room = None if fixed is None else max(0, fixed - chrome)
                 used = 0
+                if small:
+                    self.sicon.delete("all")
+                    for pts in T.ICONS[icon]:
+                        self.sicon.create_line(*[v + 2 for v in pts], fill=tint or T.MUTED, width=1.5,
+                                               capstyle="round", joinstyle="round")
+                    self.stext.configure(text=text, font=(T.FONT, n),
+                                         wraplength=max(60, self.w - 2 - T.S2 - 20 - T.S2 - 24 - T.S1))
+                    self.strip.pack(fill="x", padx=(T.S2, T.S1))
                 for i, (kind, value, gap, act) in enumerate(rows):
-                    top = 0 if i == 0 else gap
+                    top = gap if (i or small) else 0
                     if kind == "map":
                         self.mapv.draw(value, wrap, None if room is None else room - top)
                         self.mapv.canvas.pack(pady=(top, 0))
@@ -352,8 +401,12 @@ class Panel:
                                     scrollregion=(0, 0, bw, max(self.body_h, self.view_h)))
                 if self.body_h <= self.view_h:
                     self.view.yview_moveto(0)
-                self.sep.pack(fill="x")
-                self.view.pack(fill="x", pady=(T.S2, PAD))
+                if small:
+                    self.view.pack(fill="x", pady=(T.S1, T.S1 + (T.S2 if rows else 0)))
+                    chrome += T.S2 if rows else 0
+                else:
+                    self.sep.pack(fill="x")
+                    self.view.pack(fill="x", pady=(T.S2, PAD))
                 self.h = chrome + self.view_h
         self.shown = True
 
@@ -406,7 +459,8 @@ class Overlay:
                            ("Location notes  (L)", "loc"), ("Battle module", "battle"),
                            ("Achievements", "ach"), ("Event log", "log")) + (
                            (("Trophy tracker", "tracker"),) if "tracker" in self.modules else ()) + (
-                           ("Collapse / expand all  (H)", "hide"), ("Reset layout", "reset")):
+                           ("Compact / full size, all  (C)", "compact"), ("Collapse / expand all  (H)", "hide"),
+                           ("Reset layout", "reset")):
             m.add_command(label=label, command=lambda a=act: self.action(a))
         m.add_separator()
         m.add_command(label="Bigger text", command=lambda: self.set_font(+1))
@@ -488,6 +542,12 @@ class Overlay:
         elif a == "done":
             self.progress.toggle(shown)
             self.view = None
+        elif a == "compact":                # all compact, or all back to full size
+            live = [p for p in self.panels.values() if p.shown and p.name != "toast"]
+            small = any(not p.compact for p in live)
+            for p in self.panels.values():
+                if p.name != "toast":
+                    p.set_compact(small)
         elif a == "hide":
             live = [p for p in self.panels.values() if p.shown]
             fold = any(not p.collapsed for p in live)
@@ -496,7 +556,7 @@ class Overlay:
         elif a == "reset":
             for p in self.panels.values():
                 p.cfg.clear()
-                p.w, p.collapsed = WIDTH, False
+                p.w, p.collapsed, p.compact = WIDTH, False, False
             self.save_ui()
         elif a in self.show:
             self.show[a] = not self.show[a]
@@ -554,7 +614,17 @@ class Overlay:
             rows.append(R("warn", ln, T.S3 if i == 0 else T.S1))
         if self.view is not None:
             rows.append(R("link", "Browsing. Back to the current step (A)", T.S3, "auto"))
-        P["guide"].set("Step %d of %d" % (idx + 1, len(p.steps)), rows, dot)
+        sh = pv.get("short") or {}
+        nav = sh.get("nav") or next((x for x in reversed(pv.get("nav", ())) if x), "")
+        srows = [R("mono", nav, 0)] if nav and g is not None else []
+        if g is None:
+            srows.append(R("meta", {"nostate": "Load a save or start a game", "nocore": "No memory data from RetroArch"}.get(
+                self.conn, "No connection to RetroArch"), 0))
+        srows += [R("warn", ln, T.S1) for ln in pv.get("warn", ())]
+        if self.view is not None:
+            srows.append(R("link", "Browsing. Back to the current step (A)", T.S1, "auto"))
+        P["guide"].set("Step %d of %d" % (idx + 1, len(p.steps)), rows, dot,
+                       short=("flag", "%d/%d  %s" % (idx + 1, len(p.steps), step["title"]), srows, dot))
 
         rows = []
         if self.toasts:
@@ -575,14 +645,17 @@ class Overlay:
                 rows.append(R("strong", a["title"], T.S2 if i else 0))
                 rows.append(R("mono", "%s / %s   +%d points" % ("{:,}".format(pr[0]), "{:,}".format(pr[1]), a["points"]), 0))
             rows = rows or [R("meta", "Nothing in progress yet")]
-        P["tracker"].set("Closest trophies", rows)
+            first = "%s  %s / %s" % (near[0][1]["title"], "{:,}".format(near[0][2][0]), "{:,}".format(near[0][2][1])) \
+                if near else "Nothing in progress yet"
+        P["tracker"].set("Closest trophies", rows, short=("trophy", first, [], None) if rows else None)
 
         rows = []
         if g is not None and self.show["self"]:
             rows = [R("strong", x) for x in (pv.get("stats"),) if x]
             rows += [R("body", x) for x in (pv.get("gear"),) if x]
             rows += [R("meta", x, T.S2 if i == 0 else T.S1) for i, x in enumerate(pv.get("self", ()))]
-        P["hero"].set(pv.get("location", p.title), rows)
+        P["hero"].set(pv.get("location", p.title), rows,
+                      short=("heart", sh.get("stats") or pv.get("stats") or "", [], None))
 
         b = pv.get("battle") if self.show["battle"] else None
         rows = []
@@ -591,14 +664,20 @@ class Overlay:
                 rows.append(R("bar", b["frac"]))
             rows += [R("body", x, T.S2 if i == 0 else T.S1) for i, x in enumerate(b.get("lines", ()))]
             rows = rows or [R("body", "In battle")]
-        P["battle"].set(b["title"] if b else "", rows)
+        P["battle"].set(b["title"] if b else "", rows,
+                        short=("sword", b["title"], ([R("bar", b["frac"], T.S1)] if b.get("frac") is not None else [])
+                               + ([R("mono", b["short"], T.S1)] if b.get("short") else []), None) if b else None)
 
         spec = pv.get("map") if self.show["map"] else None
         P["map"].tools["zoom"].set("minus" if self.show["zoom"] else "plus")
-        P["map"].set("Map", [R("map", spec)] if spec else [])
+        P["map"].set("Map", [R("map", spec)] if spec else [],
+                     short=("pin", pv.get("location", "Map"), [R("map", spec, T.S1)], None) if spec else None)
 
         notes = pv.get("notes", ()) if self.show["loc"] else ()
-        P["notes"].set("Notes", [R("body", x, T.S2) for x in notes])
+        first = notes[0] if notes else ""
+        P["notes"].set("Notes", [R("body", x, T.S2) for x in notes],
+                       short=("note", (first if len(first) <= 64 else first[:62].rstrip() + "...")
+                              + ("  (+%d more)" % (len(notes) - 1) if len(notes) > 1 else ""), [], None))
 
         rows, title = [], "Achievements"
         if self.show["ach"] and self.ach is not None and self.ach.items:
@@ -629,7 +708,15 @@ class Overlay:
                     rows.append(R("meta", "%s · %s%d points" % (
                         a["text"], "%s / %s · " % ("{:,}".format(pr[0]), "{:,}".format(pr[1])) if pr and pr[1] > 1 else "",
                         a["points"]), 0))
-        P["ach"].set(title, rows)
+        short = None
+        if rows:
+            near = [(pr[0] / float(pr[1]), a, pr) for a in A.items for pr in (A.progress.get(a["id"]),)
+                    if pr and pr[1] > 1 and a["id"] not in A.unlocked and not a.get("secret")]
+            near.sort(key=lambda x: -x[0])
+            short = ("trophy", "%d / %d  ·  %d points" % (A.count(), len(A.items), A.points()),
+                     [R("meta", "Next: %s  %s / %s" % (near[0][1]["title"], "{:,}".format(near[0][2][0]),
+                                                      "{:,}".format(near[0][2][1])), 0)] if near else [], None)
+        P["ach"].set(title, rows, short=short)
 
         rows = []
         if self.show["log"]:
@@ -637,7 +724,9 @@ class Overlay:
                 rows.append(R("body" if i == 0 else "meta", "%s  %s" % (time.strftime("%H:%M", time.localtime(when)), text),
                               0 if i == 0 else 2))
             rows = rows or [R("meta", "Nothing has happened yet. Wins, levels, items, steps and achievements show up here")]
-        P["log"].set("Log", rows)
+        last = self.log[-1] if self.log else None
+        P["log"].set("Log", rows, short=("list", "%s  %s" % (time.strftime("%H:%M", time.localtime(last[0])), last[1])
+                                          if last else "Nothing has happened yet", [], None))
         self.layout()
 
     def layout(self):
