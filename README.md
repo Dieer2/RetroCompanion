@@ -103,6 +103,15 @@ can show the game, your level and place and the step you are on (off by default)
 through the Discord program on the same computer and needs a Discord application ID, a
 public number entered in the settings until Retro Companion has its own.
 
+## Updates
+
+The built program (`RetroCompanion.exe`) updates itself. At start it asks GitHub for the
+latest release; when there is a newer one, a line at the bottom of the sidebar says so.
+"Update and restart" downloads the new program from the release page, compares it with the
+SHA-256 the release lists, puts it in the place of the running one and starts it. Settings
+and progress are not touched. The check can be switched off in the settings; a click on the
+version number checks by hand. Run from source, the window only points to the release page.
+
 ## Ideas
 
 "Ideas" at the bottom of the sidebar, and the Ideas page of the website, list the features

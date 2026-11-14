@@ -13,6 +13,7 @@ from . import APP_NAME, SUPPORT_URL, VERSION, retroarch as ra
 from . import avatars
 from . import discord
 from . import sound
+from . import update
 from . import moby
 from .account import Account, AccountError
 from .achievements import Achievements
@@ -152,6 +153,11 @@ class App:
         self._moby_err = ""
         self._profile_win = None
         self._ideas = None          # the open ideas window, if any
+        self._update = None         # a newer release, once the check has found one
+        self._upd = None            # the open update window, if any
+        self._upd_busy = ""         # "check" or "install" while one of them runs
+        self._upd_error = ""
+        update.cleanup()            # what an earlier update left behind
         self._shop_y = 0.0          # where the shop list was scrolled to
         self._cmd = None            # a RetroArch connection of the main thread, for commands without a reply
         self.presence = discord.Presence(self.store.settings.get("discord_app") or discord.APP_ID)
@@ -182,6 +188,8 @@ class App:
         root.minsize(860, 560)
         root.protocol("WM_DELETE_WINDOW", self.quit)
         self.build()
+        if (store is None or os.environ.get("RC_UPDATE_API")) and self.store.settings.get("update_check", True):
+            root.after(2500, self.check_update)
         threading.Thread(target=self.net_loop, daemon=True).start()
         threading.Thread(target=hotkey_thread, args=(self.q, lambda: self.overlay is not None, self.stop),
                          daemon=True).start()
@@ -229,7 +237,14 @@ class App:
         T.button(tk, foot, "Settings", self.open_settings).pack(fill="x")
         ver = tk.Frame(foot, bg=T.DEEP)
         ver.pack(fill="x", pady=(S2, 0))
-        tk.Label(ver, text="v" + VERSION, bg=T.DEEP, fg=T.MUTED, font=(T.MONO, 8), anchor="w").pack(side="left")
+        vl = tk.Label(ver, text="v" + VERSION, bg=T.DEEP, fg=T.MUTED, font=(T.MONO, 8), anchor="w", cursor="hand2")
+        vl.pack(side="left")
+        vl.bind("<Button-1>", lambda e: self.open_update())
+        # shown only when a newer version is out
+        self.upd_lbl = tk.Label(foot, text="", bg=T.DEEP, fg=T.accent_text(self.sel.accent), font=(T.FONT, 9),
+                                anchor="w", justify="left", cursor="hand2", wraplength=216)
+        self.upd_lbl.bind("<Button-1>", lambda e: self.open_update())
+        self.show_update_notice()
         T.button(tk, ver, "What's new", self.open_news, kind="quiet", size=9).pack(side="right")
         T.button(tk, ver, "Ideas", self.open_ideas, kind="quiet", size=9).pack(side="right", padx=(0, S3))
         # the player's profile: level, points, trophies. Click opens the profile and shop window
@@ -694,6 +709,150 @@ class App:
 
         T.button(tk, row, "Choose a picture file", own).pack(side="right", anchor="n")
         note.pack(side="left", fill="x", expand=True, padx=(0, T.S3))
+
+    # -- updating the program ----------------------------------------------------------
+    def show_update_notice(self):
+        if self._update:
+            self.upd_lbl.configure(text="Version %s is available. Update" % self._update["version"])
+            self.upd_lbl.pack(fill="x", pady=(T.S2, 0))
+        else:
+            self.upd_lbl.pack_forget()
+
+    def check_update(self):
+        if self._upd_busy:
+            return
+        self._upd_busy = "check"
+
+        def work():
+            try:
+                self.q.put(("update", update.check(VERSION), ""))
+            except update.UpdateError as exc:
+                self.q.put(("update", None, str(exc)))
+            except Exception as exc:
+                self.q.put(("update", None, "The check failed (%s)" % exc))
+        threading.Thread(target=work, daemon=True).start()
+        self.fill_update()
+
+    def on_update(self, info, err):
+        self._upd_busy, self._update, self._upd_error = "", info, err
+        self.show_update_notice()
+        self.fill_update()
+
+    def open_update(self):
+        tk = self.tk
+        if self._upd is not None and self._upd["win"].winfo_exists():
+            self._upd["win"].lift()
+            return
+        win = tk.Toplevel(self.root)
+        win.title("Update")
+        win.configure(bg=T.PAGE)
+        win.transient(self.root)
+        win.geometry("520x420+%d+%d" % (self.root.winfo_rootx() + 300, self.root.winfo_rooty() + 80))
+        tk.Label(win, text="Update", bg=T.PAGE, fg=T.TEXT, font=(T.FONT, 14), anchor="w").pack(
+            fill="x", padx=T.S6, pady=(T.S6, 0))
+        head = tk.Label(win, text="", bg=T.PAGE, fg=T.TEXT2, font=(T.FONT, 10), anchor="w", justify="left", wraplength=472)
+        head.pack(fill="x", padx=T.S6, pady=(T.S2, 0))
+        bar = tk.Frame(win, bg=T.PAGE)
+        bar.pack(side="bottom", fill="x", padx=T.S6, pady=T.S6)
+        go = T.button(tk, bar, "Update and restart", self.install_update, kind="primary", accent=self.sel.accent)
+        page = T.button(tk, bar, "Open the release page", lambda: webbrowser.open((self._update or {}).get("page") or update.PAGE))
+        again = T.button(tk, bar, "Check again", self.check_update, kind="quiet")
+        note = tk.Label(win, text="", bg=T.PAGE, fg=T.MUTED, font=(T.FONT, 9), anchor="w", justify="left", wraplength=472)
+        note.pack(side="bottom", fill="x", padx=T.S6, pady=(T.S2, 0))
+        t = tk.Text(win, bg=T.CARD, fg=T.TEXT2, bd=0, highlightthickness=1, highlightbackground=T.hair(T.CARD),
+                    wrap="word", font=(T.FONT, 10), cursor="arrow", padx=T.S3, pady=T.S2, height=6)
+        t.pack(fill="both", expand=True, padx=T.S6, pady=(T.S3, 0))
+        self._upd = {"win": win, "head": head, "note": note, "text": t, "go": go, "page": page, "again": again}
+        if self._update is None and not self._upd_busy:
+            self.check_update()
+        else:
+            self.fill_update()
+
+    def fill_update(self, progress=""):
+        w = self._upd
+        if w is None or not w["win"].winfo_exists():
+            return
+        info, busy = self._update, self._upd_busy
+        why = update.can_install() if info else ""
+        if busy == "check":
+            head, note = "Looking for a new version", ""
+        elif busy == "install":
+            head, note = "Downloading version %s" % info["version"], progress or "Starting the download"
+        elif info:
+            head = "Version %s is available. You have version %s" % (info["version"], VERSION)
+            note = why or ("The new program is downloaded from the release page on GitHub, checked against the "
+                           "checksum of the release, put in the place of this one and started. Settings and "
+                           "progress stay as they are")
+        elif self._upd_error:
+            head, note = "The check did not work", self._upd_error
+        else:
+            head, note = "You have the newest version, %s" % VERSION, ""
+        w["head"].configure(text=head)
+        w["note"].configure(text=note, fg=T.NEG if (self._upd_error and not info and not busy) else T.MUTED)
+        t = w["text"]
+        t.configure(state="normal")
+        t.delete("1.0", "end")
+        if info and info.get("notes"):
+            t.insert("end", info["notes"])
+        else:                                   # nothing from the release: this program's own list of news
+            for n in NEWS[:3]:
+                t.insert("end", "%s  %s\n" % (n["date"], n["title"]))
+                for it in n["items"]:
+                    t.insert("end", "  %s\n" % it)
+        t.configure(state="disabled")
+        for b in (w["go"], w["page"], w["again"]):
+            b.pack_forget()
+        if not busy:
+            if info and not why and info.get("url"):
+                w["go"].pack(side="right")
+            if info:
+                w["page"].pack(side="right", padx=(0, T.S2))
+            w["again"].pack(side="left")
+
+    def install_update(self):
+        info = self._update
+        if not info or self._upd_busy or update.can_install():
+            return
+        self._upd_busy, self._upd_error = "install", ""
+        dest = update.paths(sys.executable)[0]
+
+        def work():
+            try:
+                last = [0.0]
+
+                def progress(done, total):
+                    if time.time() - last[0] > 0.2:
+                        last[0] = time.time()
+                        self.q.put(("updl", done, total, None, ""))
+                update.download(info, dest, progress)
+                self.q.put(("updl", 0, 0, dest, ""))
+            except update.UpdateError as exc:
+                self.q.put(("updl", 0, 0, None, str(exc)))
+            except Exception as exc:
+                self.q.put(("updl", 0, 0, None, "The update failed (%s)" % exc))
+        threading.Thread(target=work, daemon=True).start()
+        self.fill_update()
+
+    def on_download(self, done, total, path, err):
+        if path is None and not err:            # still coming
+            mb = lambda n: "%.1f MB" % (n / 1048576.0)
+            self.fill_update("%s of %s" % (mb(done), mb(total)) if total else mb(done))
+            return
+        self._upd_busy = ""
+        if not err:
+            try:
+                exe = update.swap(sys.executable, path)
+                self.store.save()
+                update.restart(exe)
+            except (update.UpdateError, OSError) as exc:
+                err = str(exc)
+        if err:
+            self._upd_error = err
+            self.fill_update()
+            if self._upd is not None and self._upd["win"].winfo_exists():
+                self._upd["note"].configure(text=err, fg=T.NEG)
+            return
+        self.quit()
 
     # -- ideas: suggest a feature, vote on the others ---------------------------------
     def open_ideas(self):
@@ -1290,7 +1449,7 @@ class App:
         win = self._settings = tk.Toplevel(self.root)
         win.title("Settings")
         win.configure(bg=T.PAGE)
-        win.geometry("640x690")
+        win.geometry("640x720")
         win.transient(self.root)
         win.lift()
         s = self.store.settings
@@ -1338,7 +1497,9 @@ class App:
         tk.Checkbutton(win, text="Open the overlay when a supported game is running", variable=auto,
                        bg=T.PAGE, fg=T.TEXT, selectcolor=T.RAISED, activebackground=T.PAGE, activeforeground=T.TEXT,
                        font=(T.FONT, 10), anchor="w", bd=0, highlightthickness=0).pack(fill="x", padx=S6 - 4, pady=(S6, 0))
-        for var, text in ((ra_msg, "Show an earned achievement as a message inside RetroArch too"),
+        upd = tk.BooleanVar(value=s.get("update_check", True))
+        for var, text in ((upd, "Look for a new version when the program starts"),
+                          (ra_msg, "Show an earned achievement as a message inside RetroArch too"),
                           (ra_shot, "Save a RetroArch screenshot when an achievement is earned"),
                           (disc, "Show the game I am playing on Discord")):
             tk.Checkbutton(win, text=text, variable=var, bg=T.PAGE, fg=T.TEXT, selectcolor=T.RAISED,
@@ -1374,6 +1535,7 @@ class App:
             s["auto_overlay"] = bool(auto.get())
             s["moby_key"] = mkey.get().strip()
             s["ra_msg"], s["ra_shot"], s["discord"] = bool(ra_msg.get()), bool(ra_shot.get()), bool(disc.get())
+            s["update_check"] = bool(upd.get())
             s["discord_app"] = disc_app.get().strip()
             self.presence.app_id = s["discord_app"] or discord.APP_ID
             if not s["discord"]:
@@ -1501,6 +1663,10 @@ class App:
                     self.on_moby(*ev[1:])
                 elif ev[0] == "net":
                     self.on_net(*ev[1:])
+                elif ev[0] == "update":
+                    self.on_update(*ev[1:])
+                elif ev[0] == "updl":
+                    self.on_download(*ev[1:])
         except queue.Empty:
             pass
         self.refresh()

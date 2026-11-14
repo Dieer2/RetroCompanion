@@ -375,4 +375,56 @@ assert body["args"]["activity"] == {"details": "Dragon Warrior", "state": "Lv 9 
 assert not discord.Presence("").usable and discord.Presence("").set("x") is None
 print("shop choices, Discord frame OK")
 print("sound, portraits, news OK")
+# updating: a newer release is found, downloaded, checked against its checksum and swapped in
+from companion import update as UP
+assert UP.parse("v0.10") == (0, 10) and UP.newer("v0.10", "0.9") and not UP.newer("v0.8", "0.8") and not UP.newer("nightly", "0.1")
+assert UP.newer("1.0", "0.99") and not UP.newer("v0.7", "0.8") and UP.parse("") == ()
+NEWEXE = b"MZ" + bytes(range(256)) * 40
+REL = {"tag": "v9.1", "sum": __import__("hashlib").sha256(NEWEXE).hexdigest(), "assets": True}
+class _Rel(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        base = "http://127.0.0.1:%d/files/" % self.server.server_address[1]
+        if self.path == "/latest":
+            body = json.dumps({"tag_name": REL["tag"], "body": "Notes of the release", "html_url": "https://example.org/rel",
+                               "assets": [{"name": "RetroCompanion.exe", "browser_download_url": base + "RetroCompanion.exe"},
+                                          {"name": "SHA256.txt", "browser_download_url": base + "SHA256.txt"}] if REL["assets"] else []}).encode()
+        elif self.path == "/files/RetroCompanion.exe":
+            body = NEWEXE
+        elif self.path == "/files/SHA256.txt":
+            body = ("%s  RetroCompanion.exe\n" % REL["sum"]).encode()
+        else:
+            self.send_response(404); self.end_headers(); return
+        self.send_response(200); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+    def log_message(self, *a): pass
+rel = http.server.HTTPServer(("127.0.0.1", 0), _Rel)
+threading.Thread(target=rel.serve_forever, daemon=True).start()
+RB = "http://127.0.0.1:%d" % rel.server_address[1]
+info = UP.check("0.8", RB + "/latest", RB + "/files/")
+assert info["version"] == "9.1" and info["notes"] == "Notes of the release" and info["url"].endswith("RetroCompanion.exe")
+assert UP.check("9.1", RB + "/latest", RB + "/files/") is None and UP.check("10.0", RB + "/latest", RB + "/files/") is None
+assert UP.check("0.8", RB + "/latest")["url"] == ""                 # files from anywhere but the project's releases are not taken
+try:
+    UP.check("0.8", RB + "/nothing"); raise SystemExit("a missing release did not fail")
+except UP.UpdateError:
+    pass
+folder = tempfile.mkdtemp(); exe = os.path.join(folder, "RetroCompanion.exe")
+with open(exe, "wb") as fh: fh.write(b"the old program")
+new, old = UP.paths(exe)
+assert os.path.basename(new) == "RetroCompanion.new.exe" and os.path.basename(old) == "RetroCompanion.old.exe"
+seen_progress = []
+assert UP.download(info, new, lambda d, t: seen_progress.append((d, t))) == new and seen_progress[-1] == (len(NEWEXE), len(NEWEXE))
+assert UP.swap(exe, new) == exe and open(exe, "rb").read() == NEWEXE and open(old, "rb").read() == b"the old program"
+UP.cleanup(exe); assert os.listdir(folder) == ["RetroCompanion.exe"] and UP.can_install(exe) == ""
+REL["sum"] = "0" * 64                                               # a file that does not match its checksum is thrown away
+try:
+    UP.download(UP.check("0.8", RB + "/latest", RB + "/files/"), new); raise SystemExit("a wrong checksum was accepted")
+except UP.UpdateError:
+    assert not os.path.exists(new) and open(exe, "rb").read() == NEWEXE
+REL["assets"] = False
+try:
+    UP.download(UP.check("0.8", RB + "/latest", RB + "/files/"), new); raise SystemExit("a release without files was accepted")
+except UP.UpdateError:
+    pass
+assert "source" in UP.can_install()                                 # the tests run from source: nothing to replace
+rel.shutdown(); print("update OK")
 print("ALL OK")

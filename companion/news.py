@@ -7,6 +7,12 @@ something on the website.
 """
 
 NEWS = [
+    dict(date="2026-11-14", title="Version 0.8", items=[
+        "The program updates itself. It looks for a new version when it starts, tells you at the bottom of "
+        "the library when there is one, and \"Update and restart\" downloads it, checks it against the "
+        "checksum of the release and starts the new version. Your settings and progress stay as they are. "
+        "The check can be switched off in the settings",
+    ]),
     dict(date="2026-11-14", title="Version 0.7", items=[
         "Ideas: suggest a feature and vote on the ideas of other players, in the program (Ideas, at the bottom "
         "of the library) and on the website. The list shows what is planned, what is open for votes and what "
