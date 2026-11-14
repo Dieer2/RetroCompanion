@@ -444,5 +444,18 @@ for town, stock in DW.SHOPS.items():                                     # the s
     notes = " ".join(DW.LOC[DW.TARGET_MAP[town]])
     assert all("%s %d" % (n, DW.PRICE[n]) in notes for n in stock), town
 assert "tips" in P.view(None, Ctx(P.steps[0], 0, False)) and "You are wearing it" not in " ".join(DW.item_tips(None)["Club"])
+# the figures in the tips are the ones in the game's code (checked whenever the ROM is at hand)
+assert all(len(bytes.fromhex(hx)) >= 2 and 0xC000 <= a < 0x10000 for a, hx, _ in DW.CODE_FACTS)
+rom_path = os.environ.get("RC_DW_ROM") or Store().game(P.id).get("rom") or ""
+if os.path.isfile(rom_path):
+    with open(rom_path, "rb") as fh:
+        assert DW.code_facts(fh.read()) == [], DW.code_facts(open(rom_path, "rb").read())
+    print("code facts agree with the ROM: %d of %d" % (len(DW.CODE_FACTS), len(DW.CODE_FACTS)))
+assert DW.code_facts(bytes(0x10000)) != []
+assert tp["Fairy Water"][0] == "Keeps weak monsters away for 127 steps, the same as REPEL" and "127 steps" in tp["REPEL"][1]
+assert DW.enemy_spells(0x01) == ["HURT 25% (3-10 damage)"] and DW.enemy_spells(0x06, 6) == ["HURTMORE 50% (20-30 damage in your armor)"]
+assert DW.enemy_spells(0x0F, 6) == ["strong fire breath 75% (65-72 damage)"]            # Magic Armor does not ease fire
+assert DW.enemy_spells(0x0F, 7) == ["strong fire breath 75% (42-48 damage in your armor)"]
+assert DW.enemy_spells(0x62) == ["STOPSPELL 50%", "HURT 50% (3-10 damage)"]
 print("tips OK")
 print("ALL OK")

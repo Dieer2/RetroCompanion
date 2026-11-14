@@ -136,27 +136,80 @@ SHOPS = {
     "Cantlin": ["Flame Sword", "Silver Shield", "Broad Sword", "Full Plate", "Magic Armor", "Hand Axe", "Large Shield",
                 "Chain Mail", "Fairy Water", "Herb", "Torch", "Dragon's Scale", "Wings"],
 }
-# what a thing does, beyond its numbers
+# What things do, read from the game's code. Each entry: CPU address in the fixed bank ($C000-$FFFF,
+# the same as the offset in the PRG data), the bytes that stand there, and what they mean. The routines
+# were found with the nmikstas disassembly (github.com/nmikstas/dragon-warrior-disassembly); the bytes
+# were then read from the owner's own ROM (2026-11-14). code_facts() checks a ROM against this list.
+CODE_FACTS = [
+    (0xDBBD, "2907 18 690A", "HEAL: random 0-7 plus 10 = 10 to 17 HP"),
+    (0xDBDC, "290F 18 6955", "HEALMORE: random 0-15 plus 85 = 85 to 100 HP"),
+    (0xDD03, "2907 18 6917", "Herb: random 0-7 plus 23 = 23 to 30 HP"),
+    (0xE749, "2907 18 6905", "HURT: random 0-7 plus 5 = 5 to 12 damage"),
+    (0xE764, "2907 18 693A", "HURTMORE: random 0-7 plus 58 = 58 to 65 damage"),
+    (0xCCFA, "C91C F00C C918 D02E", "Erdrick's Armor heals on every step, Magic Armor goes on to a step counter"),
+    (0xDFD1, "A5CF 2920 D00B A5CF 0920 85CF", "Fighter's Ring: putting it on only sets a flag"),
+    (0xCD06, "2903", "Magic Armor: 1 HP on every 4th step"),
+    (0xCDD0, "C91C", "swamp: no damage in Erdrick's Armor"),
+    (0xCDE1, "38 E902", "swamp: 2 HP a step"),
+    (0xCE27, "C91C", "barrier: no damage in Erdrick's Armor"),
+    (0xCE46, "38 E90F", "barrier: 15 HP a step"),
+    (0xDD47, "A903", "Torch: light 3 tiles across"),
+    (0xDA6A, "A950", "RADIANT: the first 80 steps at full size"),
+    (0xDA7F, "C907", "RADIANT: light 7 tiles across"),
+    (0xCA64, "A93C", "RADIANT: then it loses 2 tiles every 60 steps"),
+    (0xDA98, "A9FF", "REPEL: timer 255, 2 off a step = 127 steps"),
+    (0xDD64, "A9FE", "Fairy Water: timer 254, 2 off a step = 127 steps"),
+    (0xDD77, "F006", "Wings: not inside a cave"),
+    (0xF107, "6902", "Dragon's Scale: defense +2"),
+    (0xCB71, "A901 85C5", "cursed: a loaded game starts at 1 HP"),
+    (0xEC2F, "2907 18 6903", "an enemy's HURT: 3 to 10 damage"),
+    (0xEC61, "290F 18 691E", "an enemy's HURTMORE: 30 to 45 damage"),
+    (0xEC3A, "C91C F004 C918 D010", "an enemy's spell: two thirds in Erdrick's Armor or Magic Armor"),
+    (0xEC74, "C91C F016", "an enemy's STOPSPELL never works on Erdrick's Armor"),
+    (0xEC7D, "4A 900E", "an enemy's STOPSPELL: 1 chance in 2"),
+    (0xECF2, "2907 0910", "fire breath: 16 to 23 damage"),
+    (0xECE6, "2907 18 6941", "strong fire breath: 65 to 72 damage"),
+    (0xED00, "C91C D010", "fire: two thirds in Erdrick's Armor only"),
+    (0xECB2, "2907 18 6914", "an enemy's HEAL: 20 to 27 HP"),
+    (0xECDA, "290F 18 6955", "an enemy's HEALMORE: 85 to 100 HP"),
+]
+
+
+def code_facts(rom):
+    """The entries of CODE_FACTS a ROM does not agree with ([] for the supported one)."""
+    d = rom[16:] if rom[:4] == b"NES\x1a" else rom
+    return [(a, what) for a, hx, what in CODE_FACTS if d[a:a + len(bytes.fromhex(hx))] != bytes.fromhex(hx)]
+
+
+# the damage of an enemy's spell or breath: name -> (low, high, which armors take a third off)
+EN_DAMAGE = {"HURT": (3, 10, (6, 7)), "HURTMORE": (30, 45, (6, 7)), "fire breath": (16, 23, (7,)),
+             "strong fire breath": (65, 72, (7,))}
+
+# what a thing does, beyond its numbers (the figures are the ones in CODE_FACTS)
 ITEM_NOTES = {
-    "Magic Armor": ["Restores 1 HP every 4 steps", "Takes a third off HURT and HURTMORE damage"],
-    "Erdrick's Armor": ["Restores 1 HP every step", "No damage from swamp and barriers",
-                        "Takes a third off fire and HURT damage", "Buried in Hauksness: SEARCH on the tree tile after the Axe Knight"],
+    "Magic Armor": ["Restores 1 HP on every 4th step", "An enemy's HURT and HURTMORE do two thirds of their damage",
+                    "Fire breath is not weakened"],
+    "Erdrick's Armor": ["Restores 1 HP on every step", "No damage from swamp (2 HP a step) and barriers (15 HP a step)",
+                        "An enemy's HURT, HURTMORE and fire breath do two thirds of their damage",
+                        "An enemy's STOPSPELL never works on you",
+                        "Buried in Hauksness: SEARCH on the tree tile after the Axe Knight"],
     "Erdrick's Sword": ["The strongest weapon. In a chest in Charlock, in the closed middle room of B2"],
     "Herb": ["Restores 23 to 30 HP", "You can carry 6"],
     "Magic Key": ["Opens one locked door, then it is gone", "You can carry 6",
                   "53 G in Rimuldar, 85 G in Tantegel, 98 G in Cantlin"],
-    "Torch": ["Lights the tiles next to you in a cave", "RADIANT (level 9) lights more"],
-    "Fairy Water": ["Keeps weak monsters away for a while, like REPEL"],
+    "Torch": ["Lights 3 by 3 tiles in a cave, until you leave it", "RADIANT (level 9) lights 7 by 7"],
+    "Fairy Water": ["Keeps weak monsters away for 127 steps, the same as REPEL"],
     "Wings": ["Takes you back to Tantegel Castle", "Does not work inside caves"],
     "Dragon's Scale": ["Defense +2 once you USE it", "Wear it right after buying"],
     "Fairy Flute": ["Puts the Golem at Cantlin's gate to sleep (use it in the battle)",
                     "Found in Kol: SEARCH 4 tiles south of the bath"],
-    "Fighter's Ring": ["No effect in the NES version (a known bug)", "Chest in the Mountain Cave, B2"],
+    "Fighter's Ring": ["No effect: the game sets a flag when you put it on, and nothing ever reads it",
+                       "Chest in the Mountain Cave, B2"],
     "Erdrick's Token": ["Proof that you are Erdrick's heir", "One of the three things the Southern Shrine asks for",
                         "Found in the swamp 70 south, 40 east of Tantegel"],
     "Gwaelin's Love": ["Tells how far you are from Tantegel and the XP to your next level", "From the princess, once she is home"],
-    "Cursed Belt": ["Cursed: do not use it", "A curse is lifted in Brecconary"],
-    "Death Necklace": ["Cursed: do not use it", "A curse is lifted in Brecconary"],
+    "Cursed Belt": ["Cursed: do not use it. While cursed, a game you load starts at 1 HP", "A curse is lifted in Brecconary"],
+    "Death Necklace": ["Cursed: do not use it. While cursed, a game you load starts at 1 HP", "A curse is lifted in Brecconary"],
     "Silver Harp": ["Played, it calls a monster", "The old man of the Northern Shrine trades the Staff of Rain for it",
                     "Chest in Garin's Grave"],
     "Stones of Sunlight": ["One of the three things the Southern Shrine asks for", "Chest in the cellar of Tantegel Castle"],
@@ -166,9 +219,11 @@ ITEM_NOTES = {
 }
 SPELL_NOTES = {
     "HEAL": "Restores 10 to 17 HP", "HURT": "5 to 12 damage", "SLEEP": "Puts the enemy to sleep",
-    "RADIANT": "Lights a cave, wider than a Torch; it fades as you walk", "STOPSPELL": "Stops the enemy's spells",
+    "RADIANT": "Lights 7 by 7 tiles in a cave. After 80 steps it shrinks to 5 by 5, 60 steps later to 3 by 3, "
+               "60 more and it is out",
+    "STOPSPELL": "Stops the enemy's spells",
     "OUTSIDE": "Takes you out of a cave", "RETURN": "Takes you back to Tantegel Castle",
-    "REPEL": "Keeps weak monsters away for a while", "HEALMORE": "Restores 85 to 100 HP", "HURTMORE": "58 to 65 damage",
+    "REPEL": "Keeps weak monsters away for 127 steps", "HEALMORE": "Restores 85 to 100 HP", "HURTMORE": "58 to 65 damage",
 }
 
 
@@ -357,7 +412,7 @@ STEPS = [
                 "Half Plate 1000 G (Kol or Garinham). The Kol area is a good place to train."]),
     dict(id="swamp", ch="3 · Rimuldar", title="Swamp Cave: cross to the south", rec=10,
          target=("Swamp Cave (north entrance)", 104, 44), goal=("map", 0x15),
-         lines=["South of Kol lies a poison swamp (hurts every step). Keep your HP up.",
+         lines=["South of Kol lies a poison swamp (2 HP every step). Keep your HP up.",
                 "Inside use a Torch or RADIANT and head for the south exit.",
                 "The side branch has a Green Dragon guarding the princess. Avoid it for now."]),
     dict(id="rimuldar", ch="3 · Rimuldar", title="Run to Rimuldar", rec=10,
@@ -1012,14 +1067,20 @@ def enemy_damage(en_atk, hero_def):
     return (0, (thr + 1) // 3)
 
 
-def enemy_spells(b):
+def enemy_spells(b, armor=0):
+    """What an enemy casts and how often; for an attack also the damage it does to this armor."""
     out = []
     hi, lo = b >> 4, b & 15
     pct = (0, 25, 50, 75)
     if hi & 3:
         out.append("%s %d%%" % (("SLEEP", "STOPSPELL", "HEAL", "HEALMORE")[hi >> 2], pct[hi & 3]))
     if lo & 3:
-        out.append("%s %d%%" % (("HURT", "HURTMORE", "fire breath", "strong fire breath")[lo >> 2], pct[lo & 3]))
+        name = ("HURT", "HURTMORE", "fire breath", "strong fire breath")[lo >> 2]
+        low, high, eased = EN_DAMAGE[name]
+        if armor in eased:                  # the game divides by 3, drops the rest, and doubles
+            low, high = low // 3 * 2, high // 3 * 2
+        out.append("%s %d%% (%d-%d damage%s)" % (name, pct[lo & 3], low, high,
+                                                " in your armor" if armor in eased else ""))
     return out
 
 
@@ -1029,7 +1090,7 @@ def battle_lines(g, max_seen):
     lo, hi = hero_damage(g.atk, dfn)
     elo, ehi = enemy_damage(att, g.dfn)
     lines = ["ATK %d · DEF %d · base HP %d · reward %d XP, %d G" % (att, dfn, base_hp, exp, gold)]
-    sp = enemy_spells(spell)
+    sp = enemy_spells(spell, g.armor)
     lines.append("Uses: " + (", ".join(sp) if sp else "physical attacks only"))
     ok = lambda r: "%d%%" % round(100 * (16 - r) / 16)
     lines.append("Your spell odds: SLEEP %s · STOPSPELL %s · HURT/HURTMORE %s · dodges %d/64"
