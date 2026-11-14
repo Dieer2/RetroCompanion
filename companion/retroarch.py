@@ -35,6 +35,14 @@ class RetroArch:
         except (socket.timeout, OSError):
             return None
 
+    def tell(self, text):
+        """Send a command that has no reply (SHOW_MSG <text>, SCREENSHOT). True when it was sent."""
+        try:
+            self.sock.sendto(text.encode("utf-8"), self.addr)
+            return True
+        except OSError:
+            return False
+
     def status(self):
         """None if RetroArch does not answer, else dict(state, system, name, crc)."""
         resp = self.ask("GET_STATUS")

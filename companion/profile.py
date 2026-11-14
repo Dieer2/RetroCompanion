@@ -8,8 +8,8 @@ adds that game's platinum trophy, worth PLATINUM_POINTS more.
     spent    points paid in the shop.
     balance  earned - spent: what can still be spent.
 
-The shop sells things that can only be had for points: other colour themes and extra
-overlay modules. Each item has a price and a level it needs. Nothing here costs money and
+The shop sells things that can only be had for points: other colour themes, extra overlay
+modules, achievement chimes, pop-up styles and frames for the profile picture. Each item has a price and a level it needs. Nothing here costs money and
 nothing in it is needed to play: the walkthrough, the map and the achievements stay free.
 
 All of this lives in the local store file, so it is an honour system: there is no account
@@ -32,7 +32,34 @@ SHOP = [
          text="Colour theme: light, dark ink on warm paper"),
     dict(id="tracker", kind="module", title="Trophy tracker", price=200, level=2,
          text="Overlay module: the three achievements you are closest to, with live progress"),
+    # the sound of an earned achievement (companion/sound.py)
+    dict(id="trophy", kind="chime", title="Fanfare", price=0, level=1,
+         text="The standard chime: four rising notes that land on a ringing chord"),
+    dict(id="coin", kind="chime", title="Coin", price=100, level=1,
+         text="Two bright notes, short and quick"),
+    dict(id="bells", kind="chime", title="Bells", price=150, level=2,
+         text="Three soft bells going up a chord"),
+    dict(id="harp", kind="chime", title="Harp", price=200, level=3,
+         text="A harp run up two octaves"),
+    # how the achievement pop-up looks (overlay.Popup)
+    dict(id="card", kind="popup", title="Card", price=0, level=1,
+         text="The standard pop-up: trophy, title, what it was for, points"),
+    dict(id="banner", kind="popup", title="Banner", price=150, level=2,
+         text="A slim strip: trophy, title and points on one line, so it covers less of the game"),
+    dict(id="edge", kind="popup", title="Grade edge", price=250, level=3,
+         text="The card with an edge and a filled trophy badge in the colour of the grade"),
+    # a frame around the profile picture
+    dict(id="plain", kind="frame", title="No frame", price=0, level=1, text="The picture as it is"),
+    dict(id="bronze", kind="frame", title="Bronze frame", price=50, level=1, text="A bronze edge around your picture"),
+    dict(id="silver", kind="frame", title="Silver frame", price=150, level=3, text="A silver edge around your picture"),
+    dict(id="gold", kind="frame", title="Gold frame", price=300, level=5, text="A gold edge around your picture"),
+    dict(id="platinum", kind="frame", title="Platinum frame", price=500, level=7,
+         text="A platinum edge around your picture"),
 ]
+# kinds where exactly one item is in use at a time, with the free item that is the default
+ONE_OF = {"theme": "warm", "chime": "trophy", "popup": "card", "frame": "plain"}
+KINDS = (("theme", "Colour themes"), ("module", "Overlay modules"), ("chime", "Achievement chimes"),
+         ("popup", "Achievement pop-ups"), ("frame", "Picture frames"))
 
 
 def grade(points):
@@ -100,13 +127,17 @@ class Profile:
         return item["price"] == 0 or item_id in self.d["owned"]
 
     def in_use(self, item):
-        if item["kind"] == "theme":
-            return self.theme() == item["id"]
+        if item["kind"] in ONE_OF:
+            return self.choice(item["kind"]) == item["id"]
         return bool(self.d["use"].get(item["id"]))
 
+    def choice(self, kind):
+        """The item in use of a kind where one is chosen (theme, chime, popup, frame)."""
+        t = self.d["use"].get(kind, ONE_OF[kind])
+        return t if any(i["id"] == t and i["kind"] == kind for i in SHOP) and self.owns(t) else ONE_OF[kind]
+
     def theme(self):
-        t = self.d["use"].get("theme", "warm")
-        return t if any(i["id"] == t and i["kind"] == "theme" for i in SHOP) and self.owns(t) else "warm"
+        return self.choice("theme")
 
     def modules(self):
         """Extra overlay modules that are owned and switched on."""
@@ -132,8 +163,8 @@ class Profile:
     def use(self, item, on=True):
         if not self.owns(item["id"]):
             return
-        if item["kind"] == "theme":
-            self.d["use"]["theme"] = item["id"]
+        if item["kind"] in ONE_OF:
+            self.d["use"][item["kind"]] = item["id"]
         else:
             self.d["use"][item["id"]] = bool(on)
         self._save()

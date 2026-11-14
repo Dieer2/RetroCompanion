@@ -158,6 +158,8 @@ footer a { color: var(--text2); }
 
 .guides-home { padding: 0 0 96px; }
 .ingame { padding: 0 0 96px; }
+.ingame .shot + .shot { margin-top: 32px; }
+.shot figcaption { margin-top: 12px; color: var(--muted); font-size: 14px; }
 .news { padding: 24px 0; border-top: 1px solid var(--hair); }
 .news:first-of-type { margin-top: 32px; }
 .news .mono { color: var(--muted); font-size: 13px; margin: 0 0 4px; }

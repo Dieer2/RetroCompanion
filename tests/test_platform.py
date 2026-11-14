@@ -307,5 +307,35 @@ assert len({str(avatars.portrait(s)) for s in avatars.BUILT_IN}) == 20
 assert avatars.keep("x.jpg") == "Choose a PNG or GIF picture" and not avatars.setting_ok({"id": 20})
 assert NEWS[0]["title"] == "Version " + __import__("companion").VERSION
 assert [n["date"] for n in NEWS] == sorted((n["date"] for n in NEWS), reverse=True)
+# the shop's choices: one chime, one pop-up style, one frame in use at a time
+from companion import discord
+from companion.profile import ONE_OF, KINDS
+ids = [i["id"] for i in SHOP]
+assert len(ids) == len(set(ids)) and {i["kind"] for i in SHOP} == {k for k, _ in KINDS}
+assert all(any(i["id"] == d and i["kind"] == k and i["price"] == 0 for i in SHOP) for k, d in ONE_OF.items())
+assert all(i["id"] in sound.SOUNDS for i in SHOP if i["kind"] == "chime")
+assert all(i["id"] in ("plain",) or i["id"] in __import__("companion.theme", fromlist=["x"]).TROPHY
+           for i in SHOP if i["kind"] == "frame")
+class _A:
+    items = [{"id": "a", "points": 600}]; unlocked = {"a": 1}
+    def count(self): return 1
+    def points(self): return 600
+pd = {}
+pq = Profile(pd, {"g": _A()}, lambda: None)
+assert pq.choice("chime") == "trophy" and pq.choice("frame") == "plain" and pq.level() == 4      # 600 + platinum 100
+coin = next(i for i in SHOP if i["id"] == "coin"); banner = next(i for i in SHOP if i["id"] == "banner")
+assert pq.buy(coin) and pq.choice("chime") == "coin" and pq.buy(banner) and pq.choice("popup") == "banner"
+pq.use(next(i for i in SHOP if i["id"] == "trophy")); assert pq.choice("chime") == "trophy" and pq.owns("coin")
+assert pq.spent() == 250 and not pq.buy(next(i for i in SHOP if i["id"] == "platinum"))        # needs level 7
+pd["use"]["frame"] = "gold"; assert pq.choice("frame") == "plain"                                 # not owned: the default
+for nm in sound.SOUNDS:
+    w = wave.open(sound.path(nm), "rb"); assert 0.5 < w.getnframes() / float(sound.RATE) < 1.8; w.close()
+# Discord's wire format, and a command without a reply reaching RetroArch
+f = discord.frame(1, discord.command(discord.activity("Dragon Warrior", "Lv 9 · Kol · step 9 of 32", 100), pid=7))
+op, n = __import__("struct").unpack("<II", f[:8]); body = json.loads(f[8:].decode("utf-8"))
+assert (op, n) == (1, len(f) - 8) and body["cmd"] == "SET_ACTIVITY" and body["args"]["pid"] == 7
+assert body["args"]["activity"] == {"details": "Dragon Warrior", "state": "Lv 9 · Kol · step 9 of 32", "timestamps": {"start": 100}}
+assert not discord.Presence("").usable and discord.Presence("").set("x") is None
+print("shop choices, Discord frame OK")
 print("sound, portraits, news OK")
 print("ALL OK")

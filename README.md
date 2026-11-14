@@ -94,6 +94,15 @@ Each module can be
 Right-click any module for the same actions, text size, transparency and **Reset layout**,
 which docks everything again. The layout is remembered per game.
 
+## RetroArch messages and Discord
+
+Three switches in the settings. An earned achievement can also be shown as a message inside
+RetroArch (on by default; it is the only sign in exclusive fullscreen, where the overlay
+cannot show), and RetroArch can save a screenshot at that moment (off by default). Discord
+can show the game, your level and place and the step you are on (off by default). It works
+through the Discord program on the same computer and needs a Discord application ID, a
+public number entered in the settings until Retro Companion has its own.
+
 ## Where things are stored
 
 `~/.retro_companion.json` holds settings, ROM locations, play time and progress.
@@ -135,8 +144,9 @@ it. Every achievement is also a trophy: bronze under 15 points, silver from 15, 
 every game add up to a level (100, 300, 600, 1000, 1500 points and so on).
 
 Points can also be spent, in the shop inside the profile window. It sells what can only be
-had for points: other colour themes and extra overlay modules (the first one is a trophy
-tracker). Each item has a price and a level it needs. Spending does not lower your level.
+had for points: other colour themes, extra overlay modules (the first one is a trophy
+tracker), achievement chimes (each can be heard before buying), pop-up styles and frames
+for the profile picture. Each item has a price and a level it needs. Spending does not lower your level.
 The walkthrough, the map and the achievements themselves never cost anything.
 
 The profile lives in the settings file on your computer. An account is optional.

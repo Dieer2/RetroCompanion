@@ -1,6 +1,7 @@
 """The companion's own sounds, made in code: no sound file comes with the program.
 
-`trophy` is the achievement chime: four quick rising notes on a soft pulse wave (an E major
+The shop sells three more chimes (coin, bells, harp); every one is a few notes written
+out below. `trophy` is the standard achievement chime: four quick rising notes on a soft pulse wave (an E major
 arpeggio, the way an 8-bit console would play it) that land on a ringing fifth with a short
 echo. It is written to a temporary WAV once and played without blocking. Playing works on
 Windows (winsound, part of Python); elsewhere this module stays silent.
@@ -51,7 +52,37 @@ def trophy_samples():
     return [s / peak * 0.6 for s in buf]
 
 
-SOUNDS = {"trophy": trophy_samples}
+def _norm(buf):
+    peak = max(abs(s) for s in buf) or 1.0
+    return [s / peak * 0.6 for s in buf]
+
+
+def coin_samples():
+    """Two bright notes a fourth apart, the second one ringing: short, for players who earn a lot."""
+    buf = []
+    _mix(buf, _tone(987.77, 0.09, duty=0.5, decay=10.0, vol=0.6), 0.0)
+    _mix(buf, _tone(1318.51, 0.75, duty=0.5, decay=5.0, vol=0.6), 0.085)
+    return _norm(buf)
+
+
+def bells_samples():
+    """Three soft bells going up a major chord, each with a quiet octave above it."""
+    buf = []
+    for i, f in enumerate((783.99, 987.77, 1174.66)):
+        _mix(buf, _tone(f, 1.1, duty=0.5, decay=3.2, vol=0.5), 0.2 * i)
+        _mix(buf, _tone(f * 2, 0.6, duty=0.5, decay=6.0, vol=0.16), 0.2 * i)
+    return _norm(buf)
+
+
+def harp_samples():
+    """A harp run: eight quick plucked notes up two octaves of a pentatonic scale."""
+    buf = []
+    for i, f in enumerate((523.25, 587.33, 659.26, 783.99, 880.0, 1046.5, 1174.66, 1318.51)):
+        _mix(buf, _tone(f, 0.7, duty=0.5, decay=6.5, vol=0.5), 0.06 * i)
+    return _norm(buf)
+
+
+SOUNDS = {"trophy": trophy_samples, "coin": coin_samples, "bells": bells_samples, "harp": harp_samples}
 
 
 def path(name):
@@ -75,7 +106,7 @@ def play(name):
     """Play a sound without waiting for it. True when it was handed to the system."""
     if sys.platform != "win32":
         return False
-    p = path(name)
+    p = path(name if name in SOUNDS else "trophy")
     if not p:
         return False
     try:

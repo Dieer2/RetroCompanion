@@ -474,11 +474,11 @@ class Popup:
         if sys.platform != "darwin":
             win.overrideredirect(True)
         win.attributes("-topmost", True)
-        box = tk.Frame(win, bg=T.CARD)
+        box = self.box = tk.Frame(win, bg=T.CARD)
         box.pack(fill="both", expand=True, padx=1, pady=1)
         self.icon = tk.Canvas(box, width=56, height=56, bg=T.CARD, highlightthickness=0)
         self.icon.pack(side="left", padx=(T.S4, 0), pady=T.S4, anchor="n")
-        col = tk.Frame(box, bg=T.CARD)
+        col = self.col = tk.Frame(box, bg=T.CARD)
         col.pack(side="left", fill="both", expand=True, padx=T.S4, pady=T.S4)
         self.meta = tk.Label(col, bg=T.CARD, fg=T.MUTED, anchor="w", justify="left")
         self.name = tk.Label(col, bg=T.CARD, fg=T.TEXT, anchor="w", justify="left")
@@ -491,19 +491,41 @@ class Popup:
         for w in (win, box, col, self.icon, self.meta, self.name, self.text, self.pts):
             w.bind("<Button-1>", lambda e: ov.action("toast_next"))
 
-    def show(self, a, count, total):
+    def show(self, a, count, total, style="card"):
+        """style: card (the standard one), banner (one slim line) or edge (the grade's colour around it)."""
         n, wrap = self.ov.fsize, self.W - 2 - 56 - 3 * T.S4
         g = grade(a["points"])
         tint = T.TROPHY[g]
         c = self.icon
         c.delete("all")
-        c.create_oval(2, 2, 54, 54, outline=tint, width=2)
+        slim = style == "banner"
+        k = 0.57 if slim else 1.0                       # the banner's badge is 32 px
+        c.configure(width=int(56 * k), height=int(56 * k))
+        c.pack_configure(pady=T.S2 if slim else T.S4)
+        c.create_oval(2, 2, 56 * k - 2, 56 * k - 2, outline=tint, width=2, fill=tint if style == "edge" else "")
         for pts in T.ICONS["trophy"]:
-            c.create_line(*[v * 2.4 + 8.8 for v in pts], fill=tint, width=2.5, capstyle="round", joinstyle="round")
-        self.meta.configure(text="Achievement unlocked", font=(T.FONT, n - 1))
-        self.name.configure(text=a["title"], font=(T.FONT, n + 4), wraplength=wrap)
-        self.text.configure(text=a["text"], font=(T.FONT, n), wraplength=wrap)
-        self.pts.configure(text="+%d points · %s   %d / %d" % (a["points"], g, count, total), font=(T.MONO, n))
+            c.create_line(*[(v * 2.4 + 8.8) * k for v in pts], fill=T.INK if style == "edge" else tint,
+                          width=2.5 if not slim else 1.5, capstyle="round", joinstyle="round")
+        self.win.configure(bg=tint if style == "edge" else T.hair(T.CARD))
+        self.box.pack_configure(padx=2 if style == "edge" else 1, pady=2 if style == "edge" else 1)
+        self.col.pack_configure(pady=T.S2 if slim else T.S4)
+        for w in (self.meta, self.name, self.text, self.pts):
+            w.pack_forget()
+        points = "+%d points · %s   %d / %d" % (a["points"], g, count, total)
+        if slim:
+            self.name.configure(text=a["title"], font=(T.FONT, n + 1), wraplength=0)
+            self.pts.configure(text=points, font=(T.MONO, n - 1))
+            self.pts.pack(side="right")
+            self.name.pack(side="left", fill="x", expand=True)
+        else:
+            self.meta.configure(text="Achievement unlocked", font=(T.FONT, n - 1))
+            self.name.configure(text=a["title"], font=(T.FONT, n + 4), wraplength=wrap)
+            self.text.configure(text=a["text"], font=(T.FONT, n), wraplength=wrap)
+            self.pts.configure(text=points, font=(T.MONO, n))
+            self.meta.pack(fill="x")
+            self.name.pack(fill="x", pady=(2, 0))
+            self.text.pack(fill="x", pady=(T.S1, 0))
+            self.pts.pack(fill="x", pady=(T.S2, 0))
         self.win.update_idletasks()
         self.h = self.win.winfo_reqheight()
         self.x = (self.win.winfo_screenwidth() - self.W) // 2
@@ -551,8 +573,10 @@ class Popup:
 
 
 class Overlay:
-    def __init__(self, tk, master, plugin, progress, ui, save_ui, on_close, ach=None, modules=(), log=None):
+    def __init__(self, tk, master, plugin, progress, ui, save_ui, on_close, ach=None, modules=(), log=None,
+                 look=None):
         self.tk = tk
+        self.look = look or (lambda: {})    # the player's choices from the shop: {"chime": id, "popup": id}
         self.master = master
         self.ach = ach              # the game's Achievements, for the tracker and the list
         self.log = log if log is not None else []      # [[unix time, text]], oldest first; the dashboard appends
@@ -644,9 +668,10 @@ class Overlay:
         self.render(force=True)
 
     def _announce(self):
-        self.popup.show(*self.toasts[0])
+        look = self.look()
+        self.popup.show(*self.toasts[0], style=look.get("popup", "card"))
         if self.ui.get("sound", True):
-            sound.play("trophy")
+            sound.play(look.get("chime", "trophy"))
         self._toast_timer = self.master.after(TOAST_MS, lambda: self.action("toast_next"))
 
     def _groups(self):
@@ -682,7 +707,7 @@ class Overlay:
             self.ui["sound"] = not self.ui.get("sound", True)
             self.save_ui()
             if self.ui["sound"]:
-                sound.play("trophy")
+                sound.play(self.look().get("chime", "trophy"))
             return
         if a == "atlas":
             if self.atlas is not None:

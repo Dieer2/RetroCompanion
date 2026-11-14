@@ -7,6 +7,16 @@ something on the website.
 """
 
 NEWS = [
+    dict(date="2026-11-14", title="Version 0.6", items=[
+        "The shop has more to spend points on: three more achievement chimes (Coin, Bells, Harp; each can be "
+        "heard before buying), two more pop-up styles (a slim banner, and a card edged in the grade's colour) "
+        "and bronze, silver, gold and platinum frames for the profile picture",
+        "An earned achievement can also show as a message inside RetroArch, which helps in exclusive "
+        "fullscreen where the overlay cannot show. RetroArch can save a screenshot at that moment too. Both "
+        "are in the settings",
+        "Discord can show the game you are playing, your level and place, and the step you are on. It is off "
+        "until you switch it on in the settings",
+    ]),
     dict(date="2026-11-14", title="Version 0.5", items=[
         "Achievement pop-up: an earned achievement slides in at the top of the screen with the trophy of its "
         "grade and Retro Companion's own chime. The sound can be switched off in the overlay's right-click menu",

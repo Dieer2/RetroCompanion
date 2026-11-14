@@ -11,13 +11,15 @@ import webbrowser
 
 from . import APP_NAME, SUPPORT_URL, VERSION, retroarch as ra
 from . import avatars
+from . import discord
+from . import sound
 from . import moby
 from .account import Account, AccountError
 from .achievements import Achievements
 from .merge import merge_into, snapshot
 from .news import NEWS
 from .overlay import Overlay
-from .profile import Profile, SHOP, GRADES, grade, level_floor
+from .profile import Profile, SHOP, GRADES, KINDS, ONE_OF, grade, level_floor
 from .plugin import Progress
 from .store import Store
 from . import theme as T
@@ -149,6 +151,10 @@ class App:
         self._moby_busy = False
         self._moby_err = ""
         self._profile_win = None
+        self._shop_y = 0.0          # where the shop list was scrolled to
+        self._cmd = None            # a RetroArch connection of the main thread, for commands without a reply
+        self.presence = discord.Presence(self.store.settings.get("discord_app") or discord.APP_ID)
+        self._since = (None, 0.0)   # (game shown on Discord, since when)
         self.sel = self.plugins[0]
         self.q = queue.Queue()
         self.stop = threading.Event()
@@ -510,7 +516,7 @@ class App:
         win = self._profile_win = tk.Toplevel(self.root)
         win.title("Profile")
         win.configure(bg=T.PAGE)
-        win.geometry("600x%d+%d+%d" % (520 + 84 * len(SHOP), self.root.winfo_rootx() + 280, self.root.winfo_rooty() + 10))
+        win.geometry("600x%d+%d+%d" % (min(860, self.root.winfo_screenheight() - 120), self.root.winfo_rootx() + 280, self.root.winfo_rooty() + 10))
         win.transient(self.root)
         lab = lambda parent, text, fg=None, font=None, **kw: tk.Label(
             parent, text=text, bg=parent.cget("bg"), fg=fg or T.MUTED, font=font or (T.FONT, 9), anchor="w",
@@ -518,7 +524,9 @@ class App:
         top = tk.Frame(win, bg=T.PAGE)
         top.pack(fill="x", padx=S6, pady=(S6, 0))
         win._pic = avatars.image(tk, self.store.settings.get("avatar"), 64)
-        pic = tk.Label(top, image=win._pic, bg=T.PAGE, bd=0, cursor="hand2")
+        edge = T.TROPHY.get(pf.choice("frame"))
+        pic = tk.Label(top, image=win._pic, bg=T.PAGE, bd=0, cursor="hand2", highlightthickness=3 if edge else 0,
+                       highlightbackground=edge or T.PAGE)
         pic.pack(side="left", anchor="n")
         pic.bind("<Button-1>", lambda e: self.pick_avatar())
         T.button(tk, top, "Change picture", self.pick_avatar, kind="quiet").pack(side="right", anchor="n")
@@ -570,36 +578,56 @@ class App:
             wraplength=380).pack(side="left", fill="x", expand=True)
         lab(win, "Shop", T.TEXT, (T.FONT, 11)).pack(fill="x", padx=S6, pady=(S6, 0))
         lab(win, "Paid with trophy points only. Points come from achievements in any game", wraplength=552).pack(
-            fill="x", padx=S6, pady=(2, S2))
-        for item in SHOP:
-            row = tk.Frame(win, bg=T.CARD, highlightthickness=1, highlightbackground=T.hair(T.CARD))
-            row.pack(fill="x", padx=S6, pady=(S2, 0))
-            side = tk.Frame(row, bg=T.CARD)
-            side.pack(side="right", padx=S4)
-            box = tk.Frame(row, bg=T.CARD)
-            box.pack(side="left", fill="x", expand=True, padx=S4, pady=S3)
-            lab(box, item["title"], T.TEXT, (T.FONT, 11)).pack(fill="x")
-            lab(box, item["text"], T.TEXT2, wraplength=360).pack(fill="x")
-            why = pf.why_not(item)
-            if pf.owns(item["id"]):
-                if pf.in_use(item):
-                    if item["kind"] == "theme":
-                        lab(side, "In use", T.TEXT2).pack()
+            fill="x", padx=S6, pady=(2, 0))
+        wrap = tk.Frame(win, bg=T.PAGE)
+        wrap.pack(fill="both", expand=True, padx=(S6, S2), pady=(0, S4))
+        cv = win._shop = tk.Canvas(wrap, bg=T.PAGE, highlightthickness=0, yscrollincrement=16)
+        sb = T.Scroll(tk, wrap, cv)
+        cv.configure(yscrollcommand=sb.set)
+        sb.c.pack(side="right", fill="y")
+        cv.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(cv, bg=T.PAGE)
+        cv.create_window(0, 0, window=inner, anchor="nw", width=552)
+        for kind, head in KINDS:
+            lab(inner, head, T.TEXT2, (T.FONT, 10)).pack(fill="x", pady=(S4, 0))
+            for item in (i for i in SHOP if i["kind"] == kind):
+                row = tk.Frame(inner, bg=T.CARD, highlightthickness=1, highlightbackground=T.hair(T.CARD))
+                row.pack(fill="x", pady=(S2, 0))
+                side = tk.Frame(row, bg=T.CARD)
+                side.pack(side="right", padx=S4)
+                box = tk.Frame(row, bg=T.CARD)
+                box.pack(side="left", fill="x", expand=True, padx=S4, pady=S2)
+                lab(box, item["title"], T.TEXT, (T.FONT, 11)).pack(fill="x")
+                lab(box, item["text"], T.TEXT2, wraplength=330).pack(fill="x")
+                if kind == "chime":             # a chime can be heard before it is bought
+                    T.button(tk, side, "Listen", lambda i=item: sound.play(i["id"]), kind="quiet").pack(side="left", padx=(0, S3))
+                why = pf.why_not(item)
+                if pf.owns(item["id"]):
+                    if pf.in_use(item):
+                        if kind in ONE_OF:
+                            lab(side, "In use", T.TEXT2).pack(side="left")
+                        else:
+                            T.button(tk, side, "Switch off", lambda i=item: self.shop(i, "off")).pack(side="left")
                     else:
-                        T.button(tk, side, "Switch off", lambda i=item: self.shop(i, "off")).pack()
+                        T.button(tk, side, "Use", lambda i=item: self.shop(i, "use")).pack(side="left")
+                elif not why:
+                    T.button(tk, side, "Buy · %d" % item["price"], lambda i=item: self.shop(i, "buy"), kind="primary",
+                             accent=self.sel.accent).pack(side="left")
                 else:
-                    T.button(tk, side, "Use", lambda i=item: self.shop(i, "use")).pack()
-            elif not why:
-                T.button(tk, side, "Buy · %d" % item["price"], lambda i=item: self.shop(i, "buy"), kind="primary",
-                         accent=self.sel.accent).pack()
-            else:
-                lab(side, "%d points" % item["price"], T.TEXT2, (T.MONO, 10), ).pack(anchor="e")
-                lab(side, why).pack(anchor="e")
+                    col = tk.Frame(side, bg=T.CARD)
+                    col.pack(side="left")
+                    lab(col, "%d points" % item["price"], T.TEXT2, (T.MONO, 10)).pack(anchor="e")
+                    lab(col, why).pack(anchor="e")
+        inner.update_idletasks()
+        cv.configure(scrollregion=(0, 0, 552, inner.winfo_reqheight() + S2))
+        cv.yview_moveto(self._shop_y)           # a purchase rebuilds the window: stay where the player was
+        win.bind("<MouseWheel>", lambda e: cv.yview_scroll(-3 if e.delta > 0 else 3, "units"))
 
     # -- profile picture ---------------------------------------------------------
     def set_avatar(self):
         self._pic = avatars.image(self.tk, self.store.settings.get("avatar"), 48)
-        self.prof_pic.configure(image=self._pic)
+        edge = T.TROPHY.get(self.profile.choice("frame"))       # a frame from the shop, in a trophy colour
+        self.prof_pic.configure(image=self._pic, highlightthickness=2 if edge else 0, highlightbackground=edge or T.DEEP)
 
     def pick_avatar(self):
         """Twenty built-in portraits, or the player's own PNG or GIF."""
@@ -695,6 +723,10 @@ class App:
 
     def shop(self, item, what):
         pf = self.profile
+        before = (pf.theme(), pf.modules())
+        win = self._profile_win
+        if win is not None and win.winfo_exists():
+            self._shop_y = win._shop.yview()[0]
         if what == "buy":
             if not pf.buy(item):
                 return
@@ -702,7 +734,12 @@ class App:
             pf.use(item, what == "use")
         self.store.save()
         self._unsynced = True
-        self.restyle()
+        if (pf.theme(), pf.modules()) != before:        # only these change how the windows are built
+            self.restyle()
+        else:
+            self.set_avatar()
+        if item["kind"] == "chime" and what != "off":
+            sound.play(item["id"])
         self.open_profile()
         self.sync()
 
@@ -1090,7 +1127,8 @@ class App:
         ui = self.store.game(pid).setdefault("ui", {})
         self.overlay = Overlay(self.tk, self.root, p, self.progress[pid], ui, self.mark_dirty, self.overlay_closed,
                                ach=self.ach[pid], modules=self.profile.modules(),
-                               log=self.store.game(pid).setdefault("log", []))
+                               log=self.store.game(pid).setdefault("log", []),
+                               look=lambda: {"chime": self.profile.choice("chime"), "popup": self.profile.choice("popup")})
         self.overlay_pid = pid
 
     def overlay_closed(self):
@@ -1109,12 +1147,16 @@ class App:
         win = self._settings = tk.Toplevel(self.root)
         win.title("Settings")
         win.configure(bg=T.PAGE)
-        win.geometry("640x470")
+        win.geometry("640x690")
         win.transient(self.root)
         win.lift()
         s = self.store.settings
         exe = tk.StringVar(value=s.get("retroarch") or ra.find_install())
         auto = tk.BooleanVar(value=s.get("auto_overlay", True))
+        ra_msg = tk.BooleanVar(value=s.get("ra_msg", True))
+        ra_shot = tk.BooleanVar(value=s.get("ra_shot", False))
+        disc = tk.BooleanVar(value=s.get("discord", False))
+        disc_app = tk.StringVar(value=s.get("discord_app", ""))
         lab = lambda text, fg=T.MUTED, **kw: tk.Label(win, text=text, bg=T.PAGE, fg=fg, font=(T.FONT, 9), anchor="w",
                                                       justify="left", **kw)
         lab("RetroArch program").pack(fill="x", padx=S6, pady=(S6, S2))
@@ -1153,7 +1195,24 @@ class App:
         tk.Checkbutton(win, text="Open the overlay when a supported game is running", variable=auto,
                        bg=T.PAGE, fg=T.TEXT, selectcolor=T.RAISED, activebackground=T.PAGE, activeforeground=T.TEXT,
                        font=(T.FONT, 10), anchor="w", bd=0, highlightthickness=0).pack(fill="x", padx=S6 - 4, pady=(S6, 0))
-        lab("MobyGames API key").pack(fill="x", padx=S6, pady=(S6, S2))
+        for var, text in ((ra_msg, "Show an earned achievement as a message inside RetroArch too"),
+                          (ra_shot, "Save a RetroArch screenshot when an achievement is earned"),
+                          (disc, "Show the game I am playing on Discord")):
+            tk.Checkbutton(win, text=text, variable=var, bg=T.PAGE, fg=T.TEXT, selectcolor=T.RAISED,
+                           activebackground=T.PAGE, activeforeground=T.TEXT, font=(T.FONT, 10), anchor="w", bd=0,
+                           highlightthickness=0).pack(fill="x", padx=S6 - 4, pady=(S2, 0))
+        lab("The message helps in exclusive fullscreen, where the overlay cannot show. Discord shows the game, "
+            "your level and place, and the step you are on; it works through the Discord program on this computer",
+            wraplength=590).pack(fill="x", padx=S6, pady=(S2, 0))
+        if not discord.APP_ID:
+            lab("Discord application ID").pack(fill="x", padx=S6, pady=(S4, S2))
+            tk.Entry(win, textvariable=disc_app, bg=T.RAISED, fg=T.TEXT, insertbackground=T.TEXT, relief="flat",
+                     font=(T.MONO, 10), highlightthickness=1, highlightbackground=T.hair(T.RAISED),
+                     highlightcolor=T.MUTED).pack(fill="x", padx=S6, ipady=6)
+            lab("Needed for Discord until Retro Companion has its own: the ID of an application made on "
+                "discord.com/developers. It is a public number, not a password", wraplength=590).pack(
+                fill="x", padx=S6, pady=(S2, 0))
+        lab("MobyGames API key").pack(fill="x", padx=S6, pady=(S4, S2))
         mkey = tk.StringVar(value=s.get("moby_key", ""))
         tk.Entry(win, textvariable=mkey, show="•", bg=T.RAISED, fg=T.TEXT, insertbackground=T.TEXT, relief="flat",
                  font=(T.MONO, 10), highlightthickness=1, highlightbackground=T.hair(T.RAISED),
@@ -1171,6 +1230,11 @@ class App:
             s["retroarch"] = exe.get().strip()
             s["auto_overlay"] = bool(auto.get())
             s["moby_key"] = mkey.get().strip()
+            s["ra_msg"], s["ra_shot"], s["discord"] = bool(ra_msg.get()), bool(ra_shot.get()), bool(disc.get())
+            s["discord_app"] = disc_app.get().strip()
+            self.presence.app_id = s["discord_app"] or discord.APP_ID
+            if not s["discord"]:
+                self.presence.set(None)
             self.store.save()
             win.destroy()
             if self.tab == "about":
@@ -1206,10 +1270,17 @@ class App:
                 delay = 1.0
             self.stop.wait(delay)
 
+    def tell_ra(self, text):
+        """A RetroArch command without a reply (SHOW_MSG, SCREENSHOT), from the main thread."""
+        if self._cmd is None:
+            self._cmd = ra.RetroArch(self.host, self.port)
+        return self._cmd.tell(text)
+
     def on_frame(self, st, pid, blocks, err):
         now = time.time()
         self.status = st
         if pid is None:
+            self.presence.set(None)
             self.live_pid, self.live_conn, self.dismissed = None, "offline", None
             if self.overlay:
                 self.overlay.update("offline", None)
@@ -1250,11 +1321,20 @@ class App:
                 self.root.after(500, self.sync)        # a new trophy goes to the server right away
                 if self.overlay and self.overlay_pid == pid:
                     self.overlay.toast(a, ach.count(), len(ach.items))
+                if self.store.settings.get("ra_msg", True):
+                    self.tell_ra("SHOW_MSG Achievement unlocked: %s (+%d points)" % (a["title"], a["points"]))
+                if self.store.settings.get("ra_shot", False):       # after the pop-up has slid in
+                    self.root.after(1200, lambda: self.tell_ra("SCREENSHOT"))
                 if self.sel.id == pid:
                     self.say("Achievement unlocked: %s (+%d points)" % (a["title"], a["points"]))
             del log[:-LOG_KEEP]                         # in place: the overlay holds this very list
             gs["last_played"] = now
             gs["summary"] = p.summary(state)
+            if self.store.settings.get("discord", False):
+                if self._since[0] != pid:
+                    self._since = (pid, now)
+                self.presence.set(p.title, "%s · step %d of %d" % (gs["summary"], pr.current() + 1, len(p.steps)),
+                                  self._since[1])
             self.dirty = True
         self.last_frame = now
         if (self.overlay is None and conn in ("live", "nostate") and self.dismissed != pid
