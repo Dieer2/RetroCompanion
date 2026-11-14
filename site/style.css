@@ -157,6 +157,7 @@ footer a { color: var(--text2); }
 .bar-fill { display: block; height: 4px; min-width: 0; background: var(--text2); border-radius: 2px; }
 
 .guides-home { padding: 0 0 96px; }
+.ingame { padding: 0 0 96px; }
 .guide-links { margin: 0; padding: 0; list-style: none; max-width: 40rem; border-top: 1px solid var(--hair); }
 .guide-links li { border-bottom: 1px solid var(--hair); }
 .guide-links a { display: block; padding: 12px 0; font-size: 17px; }

@@ -6,6 +6,8 @@ route on a live map, enemy stats in battle, your own stats.
 
 Included game: **Dragon Warrior** (NES, 1989).
 
+![Dragon Warrior running in RetroArch with the overlay windows around it: the current walkthrough step, the hero's stats, achievements, monster notes, the map with the route, and the event log](site/img/in-game.png)
+
 Download: https://retro.dieergames.hu. Nothing from the games comes with the program: on
 first start you choose your own ROM (Dragon Warrior (USA), first release), and the app reads
 the maps, monster tables and the rest from it and keeps them in `~/RetroCompanion/data`.
