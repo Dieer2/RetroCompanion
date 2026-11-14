@@ -24,6 +24,7 @@ sys.path.insert(0, ROOT)
 import games.dragon_warrior as DW       # noqa: E402  (only constants: no ROM data is read or written)
 
 BASE = "https://retro.dieergames.hu"
+MONTHS = ("January February March April May June July August September October November December").split()
 ORDER = ["dragon-warrior-walkthrough", "dragon-warrior-hidden-items", "dragon-warrior-levels-spells",
          "dragon-warrior-shops-prices", "dragon-warrior-game-code-facts", "dragon-warrior-history"]
 NAV = ('<a href="/#features">Features</a><a href="/guides">Guides</a><a href="/#leaderboard">Leaderboard</a>'
@@ -72,7 +73,7 @@ PAGE = """<!doctype html>
 <footer>
   <p>Retro Companion has no connection to Square Enix or Nintendo. Game names belong to their owners.
     This site does not distribute ROMs.</p>
-  <p><a href="/">Home</a> · <a href="/guides">Guides</a> · <a href="/support">Support</a> · <a href="/privacy">Privacy</a></p>
+  <p><a href="/">Home</a> · <a href="/guides">Guides</a> · <a href="/news">What's new</a> · <a href="/support">Support</a> · <a href="/privacy">Privacy</a></p>
 </footer>{scripts}
 <script src="/motion.js" defer></script>
 <script src="/hit.js" defer></script>
@@ -281,7 +282,22 @@ def main():
                             'The facts come from the game itself.</p>\n  <div class="guide-list">\n' + listing + "\n  </div>")
     with open(os.path.join(ROOT, "site", "guides.html"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write(page)
-    urls = ["/", "/guides"] + ["/guides/" + s for s, _, _ in arts] + ["/support", "/privacy"]
+    # what is new: the same list the program shows (companion/news.py)
+    from companion.news import NEWS
+    parts = []
+    for n in NEWS:
+        y, mo, d = n["date"].split("-")
+        parts.append('  <section class="news">\n    <p class="mono"><time datetime="%s">%d %s %s</time></p>\n    <h2>%s</h2>\n    <ul>\n%s    </ul>\n  </section>'
+                     % (n["date"], int(d), MONTHS[int(mo) - 1], y, html.escape(n["title"], quote=False),
+                        "".join("      <li>%s</li>\n" % html.escape(it, quote=False) for it in n["items"])))
+    desc = "What is new in Retro Companion and on its website, with dates: new versions of the program, guides and features."
+    page = PAGE.format(title="What's new · Retro Companion", desc=esc(desc), url=BASE + "/news", base=BASE,
+                       ogtype="website", nav=NAV, scripts="",
+                       body='  <h1>What\'s new</h1>\n  <p class="lead">New things in the program and on this site, newest first. '
+                            'The program shows the same list in its library window.</p>\n' + "\n".join(parts))
+    with open(os.path.join(ROOT, "site", "news.html"), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(page)
+    urls = ["/", "/guides"] + ["/guides/" + s for s, _, _ in arts] + ["/news", "/support", "/privacy"]
     with open(os.path.join(ROOT, "site", "sitemap.xml"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
                  + "".join("  <url><loc>%s%s</loc></url>\n" % (BASE, u) for u in urls) + "</urlset>\n")

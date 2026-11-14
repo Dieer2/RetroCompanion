@@ -270,4 +270,42 @@ assert P.events(G(map=7), G()) == ["Entered Kol"] and P.events(G(), None) == []
 assert P.events(G(items=[5]), G()) == ["Got Fairy Flute"] and P.events(G(equip=0x60), G(equip=0x20)) == ["Equipped Copper Sword"]
 assert P.events(G(hp=0), G()) == ["Fell in battle. Half of the gold is lost"]
 print("battle bar and log lines OK")
+# the full-size map: every place has a status that follows the walkthrough
+def AT(cur, seen=(5, 4, 1, 8), g=None):
+    return P.atlas(g, Ctx(P.steps[cur], cur, False, cur, frozenset(s["id"] for s in P.steps[:cur]), frozenset(seen)))
+at = AT(8, (5, 4, 1, 8, 9, 7))                          # on "Fairy Flute in Kol"
+st = {m["name"]: m["status"] for m in at["maps"][1]["marks"]}
+assert st["Kol"] == "now" and st["Brecconary"] == "done" and st["Rimuldar"] == "later", st
+assert st["Mountain Cave"] == "optional" and st["Erdrick's Cave"] == "optional"     # never needed / skipped unseen
+assert st["Garinham"] == "later" and st["Erdrick's Token (swamp)"] == "later"       # the harp waits under Garinham
+assert st["Swamp Cave (north entrance)"] == st["Swamp Cave (south entrance)"] == "later"
+assert len(at["order"]) == 29 and at["order"][0] == 1 and at["here"] is None
+kol = {m["name"]: m for m in at["maps"][0x07]["marks"]}
+assert kol["Fairy Flute in Kol"]["status"] == "now" and (kol["Fairy Flute in Kol"]["x"], kol["Fairy Flute in Kol"]["y"]) == (9, 6)
+assert kol["To Alefgard (overworld)"]["goto"] == 1
+gg = {m["name"]: m for m in at["maps"][0x1A]["marks"]}
+assert any(n.endswith("Silver Harp") for n in gg) and gg["Silver Harp (Garin's Grave)"]["status"] == "later"
+assert len(at["maps"][1]["areas"]) == 64 and "Slime" in at["maps"][1]["areas"][3 * 8 + 2][4][0]
+end = AT(len(P.steps) - 1, range(1, 0x1E))
+assert all(m["status"] in ("done", "now", "optional") for m in end["maps"][1]["marks"])
+g = G(map=1, x=45, y=43)
+live = AT(1, (5, 4, 1), g)
+assert live["here"] == 1 and live["player"] == (45, 43) and live["maps"][1]["path"][-1] == (48, 41)
+assert {m["name"]: m["status"] for m in live["maps"][1]["marks"]}["Brecconary"] == "now"
+print("full-size map OK")
+
+# the chime is made in code; the portraits and the news list are complete
+import wave
+from companion import avatars, sound
+from companion.news import NEWS
+w = wave.open(sound.path("trophy"), "rb")
+assert w.getframerate() == sound.RATE and 0.8 < w.getnframes() / float(sound.RATE) < 1.6
+w.close()
+assert len(avatars.BUILT_IN) == 20 and len({s[0] for s in avatars.BUILT_IN}) == 20
+assert all(len(avatars.portrait(s)) == 16 and all(len(r) == 16 for r in avatars.portrait(s)) for s in avatars.BUILT_IN)
+assert len({str(avatars.portrait(s)) for s in avatars.BUILT_IN}) == 20
+assert avatars.keep("x.jpg") == "Choose a PNG or GIF picture" and not avatars.setting_ok({"id": 20})
+assert NEWS[0]["title"] == "Version " + __import__("companion").VERSION
+assert [n["date"] for n in NEWS] == sorted((n["date"] for n in NEWS), reverse=True)
+print("sound, portraits, news OK")
 print("ALL OK")

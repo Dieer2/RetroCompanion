@@ -105,6 +105,13 @@ class GamePlugin:
            (no connection): then return whatever static help makes sense."""
         return {}
 
+    def atlas(self, state, ctx):
+        """Everything known about the game's maps, for the full-size map window (see
+        companion/atlas.py for the shape), or None when the plugin has no map. ctx.current is
+        the step the player is on, ctx.done the ids of the finished steps, ctx.seen what
+        observe() recorded; state may be None."""
+        return None
+
     def banner(self):
         """Optional backdrop for the game page: dict(rows=[str], palette={char: color}, y0, h)."""
         return None

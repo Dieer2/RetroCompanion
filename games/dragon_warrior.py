@@ -693,17 +693,21 @@ class World:
         return None
 
     def enemies_at(self, g):
+        return self.enemies(g.map, g.x, g.y)
+
+    def enemies(self, m, x=0, y=0):
+        """The enemy types of the random encounters on a map (on the overworld: around a tile)."""
         d = self.d
-        if g.map == 1:
-            row = d["grid"][min(7, g.y // 15)][min(7, g.x // 15)]
-        elif g.map == 0x02:
+        if m == 1:
+            row = d["grid"][min(7, y // 15)][min(7, x // 15)]
+        elif m == 0x02:
             row = 0x10
-        elif g.map == 0x03:
+        elif m == 0x03:
             row = 0x0D
-        elif g.map == 0x06:
+        elif m == 0x06:
             row = 0x12
-        elif 0x0F <= g.map <= 0x1B:
-            row = d["cave"][g.map - 0x0F]
+        elif 0x0F <= m <= 0x1B:
+            row = d["cave"][m - 0x0F]
         else:
             return []
         out = []
@@ -951,6 +955,40 @@ COL_DUN = {"0": "#20222b", "1": "#f4f4ff", "2": "#8d8272", "3": "#9fc4ff", "4": 
 
 
 # --------------------------------------------------------------------------
+# THE FULL-SIZE MAP: places, what is there, and what is still to do
+# --------------------------------------------------------------------------
+# A place is one name for the maps that belong together. kind: the filter it is listed under.
+PLACES = [
+    ("Tantegel Castle", (0x04, 0x05, 0x0C), "town"), ("Brecconary", (0x08,), "town"),
+    ("Garinham", (0x09,), "town"), ("Kol", (0x07,), "town"), ("Rimuldar", (0x0B,), "town"),
+    ("Cantlin", (0x0A,), "town"), ("Hauksness", (0x03,), "town"),
+    ("Northern Shrine", (0x0D,), "town"), ("Southern Shrine", (0x0E,), "town"),
+    ("Erdrick's Cave", (0x1C, 0x1D), "cave"), ("Swamp Cave", (0x15,), "cave"),
+    ("Mountain Cave", (0x16, 0x17), "cave"), ("Garin's Grave", (0x18, 0x19, 0x1A, 0x1B), "cave"),
+    ("Charlock Castle", (0x02, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x06), "cave"),
+]
+PLACE_OF = {m: i for i, (_, maps, _) in enumerate(PLACES) for m in maps}
+INSIDE = {"Garin's Grave": "Garinham"}       # a place entered through another one, not from the overworld
+ATLAS_FILTERS = [("town", "Towns, castles, shrines"), ("cave", "Caves and dungeons"), ("quest", "Quest spots"),
+                 ("chest", "Chests"), ("stairs", "Stairs and exits"), ("zone", "Monster zones"),
+                 ("route", "Route"), ("names", "Names")]
+ATLAS_LEGEND = [("now", "The current step is here"), ("todo", "Still something to do"),
+                ("later", "Needed later in the walkthrough"), ("done", "Done, nothing left here"),
+                ("optional", "Optional, never needed")]
+STATUS_RANK = {"now": 0, "todo": 1, "later": 2, "done": 3, "optional": 4, "info": 5}
+
+
+def step_place(step):
+    """Index into PLACES of the place a step happens in, "world" for a tile of the overworld, else None."""
+    goal = step.get("goal")
+    if not goal:
+        return None
+    if goal[1] == 0x01:
+        return "world" if goal[0] == "tile" else None
+    return PLACE_OF.get(goal[1])
+
+
+# --------------------------------------------------------------------------
 # PLUGIN
 # --------------------------------------------------------------------------
 for _s in STEPS:
@@ -1165,6 +1203,149 @@ class DragonWarrior(GamePlugin):
         pal = COL_WORLD if g.map == 1 else (COL_DUN if W.dun[g.map] else COL_TOWN)
         return dict(base=g.map, rows=W.rows[g.map], palette=pal, x0=x0, y0=y0, vw=vw, vh=vh, z=z,
                     rects=rects, labels=labels, path=on_map, goal=mark, player=(g.x, g.y))
+
+    # -- the full-size map -------------------------------------------------------
+    def atlas(self, g, ctx):
+        W = self.world
+        if W is None:
+            return None
+        steps, done, seen = self.steps, ctx.done, ctx.seen
+        cur = ctx.current
+        # "now" is the step the player is on; a training step has no place, so the next one that has
+        now = next((i for i in range(cur, len(steps)) if steps[i]["id"] not in done and step_place(steps[i]) is not None),
+                   None)
+
+        def state(i):
+            if steps[i]["id"] in done:
+                return "done"
+            return "now" if i == now else ("todo" if i < cur else "later")
+
+        def summed(idx, visited):
+            """One status for a place from the steps that happen there."""
+            if not idx:
+                return "optional"
+            st = min((state(i) for i in idx), key=STATUS_RANK.get)
+            if st == "done" and not visited and all(steps[i].get("optional") for i in idx):
+                return "optional"
+            return st
+
+        def step_lines(idx):
+            word = {"done": "done", "now": "the current step", "todo": "still open", "later": "later"}
+            return ["Step %d: %s (%s)" % (i + 1, steps[i]["title"], word[state(i)]) for i in idx]
+
+        by_place = {}
+        for i, s in enumerate(steps):
+            by_place.setdefault(step_place(s), []).append(i)
+        names = [n for n, _, _ in PLACES]
+        info = []                       # per place: status, the lines of its mark
+        for pi, (name, maps, kind) in enumerate(PLACES):
+            idx = list(by_place.get(pi, []))
+            for child, parent in INSIDE.items():
+                if parent == name:
+                    idx += by_place.get(names.index(child), [])
+            visited = any(m in seen for m in maps)
+            st = summed(sorted(idx), visited)
+            lines = step_lines(sorted(idx)) or ["No step of the walkthrough leads here. Treasure only"]
+            lines.append("You have been here" if visited else "Not visited yet")
+            loot = [c for m in maps for (_, _, c) in W.chests.get(m, ())]
+            if loot:
+                lines.append("Chests: " + ", ".join(loot))
+            en = []
+            for m in maps:
+                en += [e for e in W.enemies(m) if e not in en]
+            if en:
+                lines.append("Monsters: " + ", ".join(ENEMIES[e] for e in en))
+            lines += LOC.get(maps[0], [])[:2]
+            info.append((st, lines))
+
+        path = {}
+        goal = ctx.step.get("goal")
+        if g is not None and goal:
+            for m, x, y in self.route_for(g, goal) or ():
+                path.setdefault(m, []).append((x, y))
+        out = {"here": g.map if g is not None else None, "player": (g.x, g.y) if g is not None else None,
+               "filters": ATLAS_FILTERS, "legend": ATLAS_LEGEND, "order": [1], "maps": {}}
+
+        def add(marks, x, y, kind, name, status, lines, goto=None, label=False):
+            for mk in marks:            # two things on one tile: one mark carrying both
+                if (mk["x"], mk["y"]) == (x, y) and mk["kind"] == kind:
+                    mk["lines"] = mk["lines"] + [name] + list(lines)
+                    if STATUS_RANK[status] < STATUS_RANK[mk["status"]]:
+                        mk["status"] = status
+                    return
+            marks.append(dict(x=x, y=y, kind=kind, name=name, status=status, lines=list(lines), goto=goto, label=label))
+
+        # the overworld
+        marks = []
+        doors = {}
+        for sm, sx, sy, tm, tx, ty in W.d["links"]:
+            if sm == 1 and tm in PLACE_OF:
+                doors.setdefault(PLACE_OF[tm], []).append((sy, sx, tm))
+        for pi, lst in doors.items():
+            name, maps, kind = PLACES[pi]
+            lst.sort()
+            for k, (sy, sx, tm) in enumerate(lst):
+                tag = "" if len(lst) == 1 else (" (north entrance)" if k == 0 else " (south entrance)")
+                add(marks, sx, sy, kind, name + tag, info[pi][0], info[pi][1], goto=tm, label=True)
+        for i in by_place.get("world", []):
+            _, _, x, y = steps[i]["goal"]
+            add(marks, x, y, "quest", steps[i]["title"], state(i),
+                step_lines([i]) + steps[i]["lines"] + ["%s" % rel_tant(x, y)], label=True)
+        areas = []
+        for zy in range(8):
+            for zx in range(8):
+                en = W.enemies(1, zx * 15, zy * 15)
+                areas.append((zx * 15, zy * 15, zx * 15 + 14, zy * 15 + 14,
+                              ["Monsters around here: " + ", ".join(
+                                  "%s (HP %d, ATK %d)" % (ENEMIES[e], DATA["en"][e][2], DATA["en"][e][0]) for e in en)
+                               if en else "No monsters around here"]))
+        rects = [(64, 49, "#ff7bd0")] if g is not None and g.mods & 0x08 else []
+        left = sorted(i for i in range(len(steps)) if steps[i]["id"] not in done)
+        out["maps"][1] = dict(
+            name=MAPS[1], status=state(now) if now is not None else "done", rows=W.rows[1], palette=COL_WORLD,
+            notes=(["Next: step %d, %s" % (now + 1, steps[now]["title"])] if now is not None else [])
+            + ["%d of %d steps done" % (len(steps) - len(left), len(steps)),
+               "Click a place for what is there and whether you still have something to do in it. "
+               "A double click opens its own map. Click anywhere else for the monsters of that area"],
+            marks=marks, areas=areas, path=path.get(1, []), rects=rects)
+
+        # every other map
+        for pi, (name, maps, kind) in enumerate(PLACES):
+            for m in maps:
+                marks = []
+                for i in by_place.get(pi, []):
+                    gl = steps[i]["goal"]
+                    if gl[0] == "tile" and gl[1] == m:
+                        add(marks, gl[2], gl[3], "quest", steps[i]["title"], state(i),
+                            step_lines([i]) + steps[i]["lines"], label=True)
+                for k, (x, y, what) in enumerate(W.chests.get(m, ()), 1):
+                    opened = g is not None and g.map == m and (x, y) in g.opened
+                    add(marks, x, y, "chest", "%d %s" % (k, what), "info",
+                        ["Chest: %s" % what] + (["Opened"] if opened else []))
+                for a, b in W.links.items():
+                    if a[0] != m:
+                        continue
+                    for tm, tx, ty in b:
+                        add(marks, a[1], a[2], "stairs", "To %s" % MAPS[tm], "info",
+                            ["Leads to %s" % MAPS[tm]], goto=tm)
+                rects = []
+                if g is not None and g.map == m:
+                    rects = [(x, y, "#5a5142") for (x, y, _) in W.chests.get(m, ()) if (x, y) in g.opened]
+                if m == 0x02 and g is not None and g.mods & 0x04:
+                    rects.append((10, 1, "#9fc4ff"))
+                en = W.enemies(m)
+                notes = step_lines(sorted(i for i in by_place.get(pi, [])
+                                          if steps[i]["goal"][1] == m or len(maps) == 1))
+                notes.append("You have been here" if m in seen else "Not visited yet")
+                if en:
+                    notes.append("Monsters: " + ", ".join(
+                        "%s (HP %d, ATK %d)" % (ENEMIES[e], DATA["en"][e][2], DATA["en"][e][0]) for e in en))
+                notes += LOC.get(m, [])
+                out["order"].append(m)
+                out["maps"][m] = dict(name=MAPS[m], status=info[pi][0], rows=W.rows[m],
+                                      palette=COL_DUN if W.dun[m] else COL_TOWN, notes=notes, marks=marks,
+                                      areas=[], path=path.get(m, []), rects=rects)
+        return out
 
     # -- the overlay content -----------------------------------------------------
     def view(self, g, ctx):

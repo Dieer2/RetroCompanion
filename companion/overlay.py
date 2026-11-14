@@ -10,10 +10,13 @@ The overlay is a set of modules, each its own small always-on-top window:
     battle   the enemy, only during a fight
     map      the live map and route
     notes    notes about the current place
-    toast    "achievement unlocked", shown for a few seconds when one is earned
     tracker  the achievements closest to completion (an extra bought in the profile shop)
     ach      every achievement of the game, one group at a time, earned or still open
     log      what happened, newest first: enemies beaten, levels, items, steps, achievements
+
+An earned achievement is announced by a pop-up that slides in at the top centre of the screen
+(Popup) with the companion's own chime (sound.py), and carries a trophy in its grade's colour
+in the achievements module. The map module opens the full-size map (atlas.py).
 
 Every module has a compact form (the two chevrons in its header, or C for all of them): no
 header, one strip with an icon and the main figures, so the game stays visible. The button
@@ -31,15 +34,17 @@ layout" in the right-click menu docks everything again. Layout is saved per game
 import sys
 import time
 
+from . import sound
 from . import theme as T
+from .atlas import Atlas
 from .profile import grade
 
 WIDTH = 380            # default module width
 CWIDTH = 280           # default width of a module in its compact form
 PAD = T.S3             # inner padding of a module
 GAP = T.S2             # space between docked modules
-ORDER = ("guide", "toast", "hero", "tracker", "battle", "map", "notes", "ach", "log")
-TOAST_MS = 9000        # how long an "achievement unlocked" module stays up
+ORDER = ("guide", "hero", "tracker", "battle", "map", "notes", "ach", "log")
+TOAST_MS = 7000        # how long an "achievement unlocked" pop-up stays up
 TOGGLE = {"hero": "self", "battle": "battle", "map": "map", "notes": "loc", "tracker": "tracker",
           "ach": "ach", "log": "log"}       # module -> show flag
 LOG_ROWS = 40          # how many log lines the module shows (the store keeps more)
@@ -49,10 +54,13 @@ LIST_H = 300           # height limit of the list modules until the player sets 
 class Ctx:
     """What a plugin gets alongside the state when asked for a view."""
 
-    def __init__(self, step, index, zoom):
-        self.step = step
+    def __init__(self, step, index, zoom, current=None, done=(), seen=()):
+        self.step = step            # the step being shown
         self.index = index
         self.zoom = zoom
+        self.current = index if current is None else current    # the step the player is on
+        self.done = done            # ids of the finished steps
+        self.seen = seen            # what the plugin's observe() recorded
 
 
 def R(kind, value, gap=T.S1, act=None):
@@ -159,6 +167,7 @@ class Panel:
         self.shown = False
         self._key = self._geom = None
         self._labels = []
+        self._irows = []
 
         win = self.win = tk.Toplevel(ov.master)
         win.withdraw()
@@ -182,8 +191,7 @@ class Panel:
         T.IconButton(tk, head, "close", self.close).c.pack(side="right", padx=(0, T.S2), pady=T.S1)
         self.fold = T.IconButton(tk, head, "up", self.toggle_collapse)
         self.fold.c.pack(side="right", pady=T.S1)
-        if name != "toast":
-            T.IconButton(tk, head, "compact", self.toggle_compact).c.pack(side="right", pady=T.S1)
+        T.IconButton(tk, head, "compact", self.toggle_compact).c.pack(side="right", pady=T.S1)
         self.tools = {}
         for icon, act in reversed(tools):
             self.tools[act] = T.IconButton(tk, head, icon, lambda a=act: ov.action(a))
@@ -229,7 +237,7 @@ class Panel:
             w.bind("<Double-Button-1>", lambda e: self.toggle_compact())
         win.bind("<Button-3>", lambda e: ov.menu.tk_popup(e.x_root, e.y_root))
         for key, act in (("<Right>", "next"), ("<Left>", "prev"), ("d", "done"), ("h", "hide"), ("a", "auto"),
-                         ("l", "loc"), ("m", "map"), ("s", "self"), ("z", "zoom"), ("c", "compact"),
+                         ("l", "loc"), ("m", "map"), ("s", "self"), ("z", "zoom"), ("c", "compact"), ("f", "atlas"),
                          ("<Escape>", "auto")):
             win.bind(key, lambda e, a=act: ov.action(a))
 
@@ -240,7 +248,7 @@ class Panel:
         return "x" in self.cfg
 
     def close(self):
-        self.ov.action({"guide": "quit", "toast": "toast_next"}.get(self.name) or TOGGLE[self.name])
+        self.ov.action("quit" if self.name == "guide" else TOGGLE[self.name])
 
     def width(self):
         """Full size and compact keep their own widths."""
@@ -323,8 +331,20 @@ class Panel:
             self._labels.append(lbl)
         return self._labels[i]
 
+    def _irow(self, i):
+        """A text row with room for a 16 px line icon in front of it."""
+        while len(self._irows) <= i:
+            f = self.tk.Frame(self.body, bg=T.CARD)
+            c = self.tk.Canvas(f, width=16, height=16, bg=T.CARD, highlightthickness=0)
+            c.pack(side="left", anchor="n", pady=1)
+            lbl = self.tk.Label(f, bg=T.CARD, justify="left", anchor="w")
+            lbl.pack(side="left", fill="x", expand=True, padx=(T.S2, 0))
+            self._irows.append((f, c, lbl))
+        return self._irows[i]
+
     def set(self, title, rows, dot=None, short=None):
-        """rows: [R(...)]; an empty list hides the module. short = (icon, text, rows, tint) is the
+        """rows: [R(...)]; an empty list hides the module. A row of kind "irow" has the value
+        (icon or None, tint, text style, text): the icon sits in a column of its own. short = (icon, text, rows, tint) is the
         compact form: one strip with an icon and the main figures, then at most a row or two."""
         if not rows:
             self.hide()
@@ -364,7 +384,7 @@ class Panel:
             if small or not self.collapsed:
                 wrap = self.w - 2 - 2 * PAD
                 room = None if fixed is None else max(0, fixed - chrome)
-                used = 0
+                used = iused = 0
                 if small:
                     self.sicon.delete("all")
                     for pts in T.ICONS[icon]:
@@ -383,6 +403,16 @@ class Panel:
                         self.bar.delete("all")
                         self.bar.create_rectangle(0, 0, int(wrap * max(0.0, min(1.0, value))), 6, fill=T.TEXT2, outline="")
                         self.bar.pack(padx=PAD, pady=(top, 0), anchor="w")
+                    elif kind == "irow":
+                        icon, tint, style, text = value
+                        f, c, lbl = self._irow(iused)
+                        iused += 1
+                        c.delete("all")
+                        for pts in T.ICONS[icon] if icon else ():
+                            c.create_line(*pts, fill=tint or T.MUTED, width=1.5, capstyle="round", joinstyle="round")
+                        fg, font = styles[style]
+                        lbl.configure(text=text, fg=fg, font=font, wraplength=wrap - 16 - T.S2)
+                        f.pack(fill="x", padx=PAD, pady=(top, 0))
                     else:
                         lbl = self._label(used)
                         used += 1
@@ -426,6 +456,100 @@ class Panel:
                 self.win.attributes("-topmost", True)
 
 
+class Popup:
+    """"Achievement unlocked", the way consoles announce it: a card that slides in at the top
+    centre of the screen, stays a few seconds and slides out. A click sends it away."""
+    W, TOP, MS = 440, 24, 280
+
+    def __init__(self, ov):
+        tk = self.tk = ov.tk
+        self.ov = ov
+        self.up = False
+        self._job = None
+        self.h = 0
+        win = self.win = tk.Toplevel(ov.master)
+        win.withdraw()
+        win.title("%s: achievement" % ov.p.title)
+        win.configure(bg=T.hair(T.CARD))
+        if sys.platform != "darwin":
+            win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        box = tk.Frame(win, bg=T.CARD)
+        box.pack(fill="both", expand=True, padx=1, pady=1)
+        self.icon = tk.Canvas(box, width=56, height=56, bg=T.CARD, highlightthickness=0)
+        self.icon.pack(side="left", padx=(T.S4, 0), pady=T.S4, anchor="n")
+        col = tk.Frame(box, bg=T.CARD)
+        col.pack(side="left", fill="both", expand=True, padx=T.S4, pady=T.S4)
+        self.meta = tk.Label(col, bg=T.CARD, fg=T.MUTED, anchor="w", justify="left")
+        self.name = tk.Label(col, bg=T.CARD, fg=T.TEXT, anchor="w", justify="left")
+        self.text = tk.Label(col, bg=T.CARD, fg=T.TEXT2, anchor="w", justify="left")
+        self.pts = tk.Label(col, bg=T.CARD, fg=T.TEXT, anchor="w", justify="left")
+        self.meta.pack(fill="x")
+        self.name.pack(fill="x", pady=(2, 0))
+        self.text.pack(fill="x", pady=(T.S1, 0))
+        self.pts.pack(fill="x", pady=(T.S2, 0))
+        for w in (win, box, col, self.icon, self.meta, self.name, self.text, self.pts):
+            w.bind("<Button-1>", lambda e: ov.action("toast_next"))
+
+    def show(self, a, count, total):
+        n, wrap = self.ov.fsize, self.W - 2 - 56 - 3 * T.S4
+        g = grade(a["points"])
+        tint = T.TROPHY[g]
+        c = self.icon
+        c.delete("all")
+        c.create_oval(2, 2, 54, 54, outline=tint, width=2)
+        for pts in T.ICONS["trophy"]:
+            c.create_line(*[v * 2.4 + 8.8 for v in pts], fill=tint, width=2.5, capstyle="round", joinstyle="round")
+        self.meta.configure(text="Achievement unlocked", font=(T.FONT, n - 1))
+        self.name.configure(text=a["title"], font=(T.FONT, n + 4), wraplength=wrap)
+        self.text.configure(text=a["text"], font=(T.FONT, n), wraplength=wrap)
+        self.pts.configure(text="+%d points · %s   %d / %d" % (a["points"], g, count, total), font=(T.MONO, n))
+        self.win.update_idletasks()
+        self.h = self.win.winfo_reqheight()
+        self.x = (self.win.winfo_screenwidth() - self.W) // 2
+        try:
+            self.win.attributes("-alpha", max(0.9, self.ov.alpha))
+        except self.tk.TclError:
+            pass
+        if not self.up:                     # already on screen: the next one takes its place
+            self.up = True
+            self._move(-self.h)
+            self.win.deiconify()
+            self.win.attributes("-topmost", True)
+            self._slide(-self.h, self.TOP, None)
+        else:
+            self._move(self.TOP)
+
+    def hide(self):
+        if self.up:
+            self.up = False
+            self._slide(self.TOP, -self.h, self.win.withdraw)
+
+    def _move(self, y):
+        self.win.geometry("%dx%d+%d+%d" % (self.W, self.h, self.x, int(y)))
+
+    def _slide(self, y0, y1, then, t0=None):
+        if self._job is not None:
+            self.win.after_cancel(self._job)
+            self._job = None
+        now = time.time()
+        t0 = t0 or now
+        k = min(1.0, (now - t0) * 1000.0 / self.MS)
+        self._move(y0 + (y1 - y0) * (1 - (1 - k) ** 3))        # one ease-out curve, in and out
+        if k < 1.0:
+            self._job = self.win.after(16, lambda: self._slide(y0, y1, then, t0))
+        elif then:
+            then()
+
+    def destroy(self):
+        if self._job is not None:
+            self.win.after_cancel(self._job)
+        try:
+            self.win.destroy()
+        except self.tk.TclError:
+            pass
+
+
 class Overlay:
     def __init__(self, tk, master, plugin, progress, ui, save_ui, on_close, ach=None, modules=(), log=None):
         self.tk = tk
@@ -449,13 +573,16 @@ class Overlay:
         self.closed = False
         self.toasts = []            # achievements waiting to be shown; the first one is on screen
         self._toast_timer = None
+        self.popup = Popup(self)
+        self.atlas = None           # the full-size map window, while it is open
 
         m = self.menu = tk.Menu(master, tearoff=0)
         for label, act in (("Next step  (Right)", "next"), ("Previous step  (Left)", "prev"),
                            ("Back to the current step  (A)", "auto"), ("Mark step done / skip  (D)", "done")):
             m.add_command(label=label, command=lambda a=act: self.action(a))
         m.add_separator()
-        for label, act in (("Map  (M)", "map"), ("Map zoom  (Z)", "zoom"), ("My stats  (S)", "self"),
+        for label, act in (("Map  (M)", "map"), ("Map zoom  (Z)", "zoom"), ("Full-size map  (F)", "atlas"),
+                           ("My stats  (S)", "self"),
                            ("Location notes  (L)", "loc"), ("Battle module", "battle"),
                            ("Achievements", "ach"), ("Event log", "log")) + (
                            (("Trophy tracker", "tracker"),) if "tracker" in self.modules else ()) + (
@@ -467,6 +594,7 @@ class Overlay:
         m.add_command(label="Smaller text", command=lambda: self.set_font(-1))
         m.add_command(label="More transparent", command=lambda: self.set_alpha(-0.1))
         m.add_command(label="Less transparent", command=lambda: self.set_alpha(+0.1))
+        m.add_command(label="Achievement sound on / off", command=lambda: self.action("sound"))
         m.add_separator()
         if sys.platform == "win32":
             m.add_command(label="In RetroArch the keys work with Ctrl+Shift held", state="disabled")
@@ -475,11 +603,10 @@ class Overlay:
         self.panels = {
             "guide": Panel(self, "guide", with_dot=True,
                            tools=(("left", "prev"), ("right", "next"), ("check", "done"))),
-            "toast": Panel(self, "toast"),
             "hero": Panel(self, "hero"),
             "tracker": Panel(self, "tracker"),
             "battle": Panel(self, "battle"),
-            "map": Panel(self, "map", tools=(("minus", "zoom"),)),
+            "map": Panel(self, "map", tools=(("full", "atlas"), ("minus", "zoom"))),
             "notes": Panel(self, "notes"),
             "ach": Panel(self, "ach", tools=(("left", "ach_prev"), ("right", "ach_next")), limit=LIST_H),
             "log": Panel(self, "log", limit=LIST_H),
@@ -507,11 +634,35 @@ class Overlay:
 
     # -- achievements ----------------------------------------------------------
     def toast(self, ach, count, total):
-        """Show "achievement unlocked" for a few seconds; several queue up one after another."""
+        """Announce an earned achievement: pop-up and chime; several queue up one after another."""
         self.toasts.append((ach, count, total))
+        groups = self._groups()
+        if ach.get("group", "") in groups:              # the achievements module turns to its group
+            self.ach_page = groups.index(ach.get("group", ""))
         if len(self.toasts) == 1:
-            self._toast_timer = self.master.after(TOAST_MS, lambda: self.action("toast_next"))
-            self.render(force=True)
+            self._announce()
+        self.render(force=True)
+
+    def _announce(self):
+        self.popup.show(*self.toasts[0])
+        if self.ui.get("sound", True):
+            sound.play("trophy")
+        self._toast_timer = self.master.after(TOAST_MS, lambda: self.action("toast_next"))
+
+    def _groups(self):
+        groups = []
+        for a in (self.ach.items if self.ach is not None else ()):
+            if a.get("group", "") not in groups:
+                groups.append(a.get("group", ""))
+        return groups
+
+    def ctx(self, idx=None):
+        """What the plugin gets with the state: the step shown and where the walkthrough stands."""
+        pr, steps = self.progress, self.p.steps
+        cur = pr.current()
+        idx = (cur if self.view is None else self.view) if idx is None else idx
+        return Ctx(steps[idx], idx, self.show["zoom"], cur,
+                   frozenset(s["id"] for i, s in enumerate(steps) if pr.is_done(i)), frozenset(pr.seen))
 
     # -- events --------------------------------------------------------------
     def action(self, a):
@@ -523,7 +674,24 @@ class Overlay:
                 self._toast_timer = None
             del self.toasts[:1]
             if self.toasts:
-                self._toast_timer = self.master.after(TOAST_MS, lambda: self.action("toast_next"))
+                self._announce()
+            else:
+                self.popup.hide()
+            return
+        if a == "sound":
+            self.ui["sound"] = not self.ui.get("sound", True)
+            self.save_ui()
+            if self.ui["sound"]:
+                sound.play("trophy")
+            return
+        if a == "atlas":
+            if self.atlas is not None:
+                self.atlas.close()
+            else:
+                data = self.p.atlas(self.state if self.conn == "live" else None, self.ctx())
+                if data:
+                    self.atlas = Atlas(self, data)
+            return
         steps = self.p.steps
         shown = self.progress.current() if self.view is None else self.view
         if a == "quit":
@@ -543,11 +711,10 @@ class Overlay:
             self.progress.toggle(shown)
             self.view = None
         elif a == "compact":                # all compact, or all back to full size
-            live = [p for p in self.panels.values() if p.shown and p.name != "toast"]
+            live = [p for p in self.panels.values() if p.shown]
             small = any(not p.compact for p in live)
             for p in self.panels.values():
-                if p.name != "toast":
-                    p.set_compact(small)
+                p.set_compact(small)
         elif a == "hide":
             live = [p for p in self.panels.values() if p.shown]
             fold = any(not p.collapsed for p in live)
@@ -566,6 +733,11 @@ class Overlay:
 
     def close(self):
         self.closed = True
+        if self._toast_timer is not None:
+            self.master.after_cancel(self._toast_timer)
+        self.popup.destroy()
+        if self.atlas is not None:
+            self.atlas.close()
         for p in self.panels.values():
             try:
                 p.win.destroy()
@@ -585,9 +757,9 @@ class Overlay:
             for pan in P.values():
                 pan._key = None
         g = self.state if self.conn == "live" else None
-        idx = self.progress.current() if self.view is None else self.view
-        step = p.steps[idx]
-        pv = p.view(g, Ctx(step, idx, self.show["zoom"])) or {}
+        ctx = self.ctx()
+        idx, step = ctx.index, ctx.step
+        pv = p.view(g, ctx) or {}
 
         rows = []
         if g is not None:
@@ -625,13 +797,6 @@ class Overlay:
             srows.append(R("link", "Browsing. Back to the current step (A)", T.S1, "auto"))
         P["guide"].set("Step %d of %d" % (idx + 1, len(p.steps)), rows, dot,
                        short=("flag", "%d/%d  %s" % (idx + 1, len(p.steps), step["title"]), srows, dot))
-
-        rows = []
-        if self.toasts:
-            a, count, total = self.toasts[0]
-            rows = [R("title", a["title"]), R("body", a["text"], T.S1),
-                    R("mono", "+%d points · %s   %d / %d" % (a["points"], grade(a["points"]), count, total), T.S2)]
-        P["toast"].set("Achievement unlocked", rows)
 
         rows = []
         if "tracker" in self.modules and self.show["tracker"] and self.ach is not None:
@@ -682,10 +847,7 @@ class Overlay:
         rows, title = [], "Achievements"
         if self.show["ach"] and self.ach is not None and self.ach.items:
             A = self.ach
-            groups = []
-            for a in A.items:
-                if a.get("group", "") not in groups:
-                    groups.append(a.get("group", ""))
+            groups = self._groups()
             self.ach_page %= len(groups)
             grp = groups[self.ach_page]
             mine = [a for a in A.items if a.get("group", "") == grp]
@@ -695,19 +857,20 @@ class Overlay:
                                                                      self.ach_page + 1, len(groups)), 0))
             for a in mine:
                 when = A.unlocked.get(a["id"])
-                if when:
-                    rows.append(R("strong", a["title"], T.S2))
-                    rows.append(R("meta", "%s · +%d points · earned %s" % (
-                        a["text"], a["points"], time.strftime("%d %b", time.localtime(when))), 0))
+                if when:                    # earned: a trophy in the colour of its grade
+                    g_ = grade(a["points"])
+                    rows.append(R("irow", ("trophy", T.TROPHY[g_], "strong", a["title"]), T.S2))
+                    rows.append(R("irow", (None, None, "meta", "%s · +%d points · %s · earned %s" % (
+                        a["text"], a["points"], g_, time.strftime("%d %b", time.localtime(when)))), 0))
                 elif a.get("secret"):
-                    rows.append(R("body", "Hidden achievement", T.S2))
-                    rows.append(R("meta", "Shown when you earn it · %d points" % a["points"], 0))
+                    rows.append(R("irow", (None, None, "body", "Hidden achievement"), T.S2))
+                    rows.append(R("irow", (None, None, "meta", "Shown when you earn it · %d points" % a["points"]), 0))
                 else:
                     pr = A.progress.get(a["id"])
-                    rows.append(R("body", a["title"], T.S2))
-                    rows.append(R("meta", "%s · %s%d points" % (
+                    rows.append(R("irow", (None, None, "body", a["title"]), T.S2))
+                    rows.append(R("irow", (None, None, "meta", "%s · %s%d points" % (
                         a["text"], "%s / %s · " % ("{:,}".format(pr[0]), "{:,}".format(pr[1])) if pr and pr[1] > 1 else "",
-                        a["points"]), 0))
+                        a["points"])), 0))
         short = None
         if rows:
             near = [(pr[0] / float(pr[1]), a, pr) for a in A.items for pr in (A.progress.get(a["id"]),)
@@ -727,6 +890,8 @@ class Overlay:
         last = self.log[-1] if self.log else None
         P["log"].set("Log", rows, short=("list", "%s  %s" % (time.strftime("%H:%M", time.localtime(last[0])), last[1])
                                           if last else "Nothing has happened yet", [], None))
+        if self.atlas is not None:
+            self.atlas.update(p.atlas(g, ctx))
         self.layout()
 
     def layout(self):

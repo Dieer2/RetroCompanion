@@ -49,6 +49,7 @@ window (the shortcuts are left alone in every other program, and when no overlay
 | L | location notes on/off |
 | H | collapse / expand every module |
 | C | compact / full size, every module |
+| F | full-size map |
 
 ## Overlay modules
 
@@ -58,7 +59,21 @@ The overlay is a set of small windows: the guide (current step), your stats, the
 The achievements module lists every achievement of the game one group at a time, earned or
 still open; the arrows in its header page through the groups. The log shows what happened,
 newest first: enemies beaten, levels gained, items found, steps finished, achievements earned.
-It is kept on this computer. Both lists scroll with the mouse wheel.
+It is kept on this computer. Both lists scroll with the mouse wheel. An earned achievement
+carries a trophy in the colour of its grade.
+
+## The full-size map
+
+F, or the corner icon in the map module's header, opens one large window with the whole
+map. Drag it to move, turn the wheel to zoom, click a mark to read what is there, and
+double-click a place to open its own map; every town, cave and dungeon floor has one, with
+its chests, what is in them, and where each staircase leads. A click on open ground of the
+overworld lists the monsters of that area.
+
+Every place carries one of five marks: the current step is here, something is still to do,
+it is needed later in the walkthrough (drawn faint), everything is done, or it is optional
+and never needed. The filters switch towns, caves, quest spots, chests, stairs, monster
+zones, the route and the names on and off.
 
 Every module has a **compact form**: the two chevrons in its header shrink it to one
 strip with an icon and the main figures (the step, your HP and gold, the enemy's HP bar, a
@@ -87,8 +102,10 @@ which docks everything again. The layout is remembered per game.
 
 Each game has its own achievements; the game page lists them on the **Achievements** tab,
 with points, progress on the counted ones and the day each was earned. When one unlocks
-while you play, a module appears in the overlay for a few seconds. Achievements are kept
-for good: a new game or "Reset progress" does not take them away.
+while you play, a card slides in at the top of the screen for a few seconds with the trophy
+of its grade and the companion's own chime (made in code; "Achievement sound on / off" in
+the overlay's right-click menu). Achievements are kept for good: a new game or "Reset
+progress" does not take them away.
 
 Dragon Warrior has 50 of them, 940 points in all:
 
@@ -123,6 +140,11 @@ tracker). Each item has a price and a level it needs. Spending does not lower yo
 The walkthrough, the map and the achievements themselves never cost anything.
 
 The profile lives in the settings file on your computer. An account is optional.
+
+The profile has a picture: one of twenty built-in portraits (drawn in code), or a PNG or GIF
+of your own, which is copied to `~/RetroCompanion` and stays on your computer. "What's new"
+at the bottom of the sidebar lists the new features with their dates; the website shows
+the same list (`companion/news.py`, written to `site/news.html` by `tools/make_guides.py`).
 
 ## Account and leaderboard
 
@@ -174,6 +196,7 @@ A plugin provides:
 | `step_done(step, state, seen)` | is a step finished |
 | `observe(state, seen)` | remember facts memory forgets (places visited) |
 | `view(state, ctx)` | what the overlay shows: stats, battle, directions, notes, map |
+| `atlas(state, ctx)` | the full-size map: every map, its marks with a status, filters (see `companion/atlas.py`) |
 | `summary(state)`, `banner()` | library extras |
 | `data_status()`, `prepare(rom_path)` | for tables read from the player's own ROM instead of being shipped |
 | `achievements` | list of `id`, `group`, `title`, `text`, `points`, optional `secret` |

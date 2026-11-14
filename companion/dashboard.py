@@ -10,10 +10,12 @@ import time
 import webbrowser
 
 from . import APP_NAME, SUPPORT_URL, VERSION, retroarch as ra
+from . import avatars
 from . import moby
 from .account import Account, AccountError
 from .achievements import Achievements
 from .merge import merge_into, snapshot
+from .news import NEWS
 from .overlay import Overlay
 from .profile import Profile, SHOP, GRADES, grade, level_floor
 from .plugin import Progress
@@ -21,7 +23,7 @@ from .store import Store
 from . import theme as T
 
 HOTKEYS = {0x27: "next", 0x25: "prev", 0x44: "done", 0x48: "hide", 0x41: "auto", 0x4C: "loc",
-           0x4D: "map", 0x53: "self", 0x5A: "zoom", 0x43: "compact"}
+           0x4D: "map", 0x53: "self", 0x5A: "zoom", 0x43: "compact", 0x46: "atlas"}
 
 
 LOG_KEEP = 300                    # log lines kept per game (this computer only, not synced)
@@ -218,18 +220,24 @@ class App:
                                  wraplength=196)
         self.conn_lbl.pack(side="left", fill="x", padx=(S2, 0))
         T.button(tk, foot, "Settings", self.open_settings).pack(fill="x")
-        tk.Label(foot, text="v" + VERSION, bg=T.DEEP, fg=T.MUTED, font=(T.MONO, 8), anchor="w").pack(fill="x", pady=(S2, 0))
+        ver = tk.Frame(foot, bg=T.DEEP)
+        ver.pack(fill="x", pady=(S2, 0))
+        tk.Label(ver, text="v" + VERSION, bg=T.DEEP, fg=T.MUTED, font=(T.MONO, 8), anchor="w").pack(side="left")
+        T.button(tk, ver, "What's new", self.open_news, kind="quiet", size=9).pack(side="right")
         # the player's profile: level, points, trophies. Click opens the profile and shop window
         prof = tk.Frame(side, bg=T.DEEP, cursor="hand2")
         prof.pack(side="bottom", fill="x", padx=S4, pady=(0, S4))
+        self.prof_pic = tk.Label(prof, bg=T.DEEP, bd=0)
+        self.prof_pic.pack(side="left", anchor="n", padx=(0, S3))
+        self.set_avatar()
         self.prof_title = tk.Label(prof, text="", bg=T.DEEP, fg=T.TEXT, font=(T.FONT, 10), anchor="w")
         self.prof_title.pack(fill="x")
         self.prof_bar = tk.Canvas(prof, height=4, bg=T.RAISED, highlightthickness=0)
         self.prof_bar.pack(fill="x", pady=(S1 + 2, S1 + 2))
         self.prof_sub = tk.Label(prof, text="", bg=T.DEEP, fg=T.MUTED, font=(T.FONT, 9), anchor="w", justify="left",
-                                 wraplength=216)
+                                 wraplength=156)
         self.prof_sub.pack(fill="x")
-        for w in (prof, self.prof_title, self.prof_bar, self.prof_sub):
+        for w in (prof, self.prof_pic, self.prof_title, self.prof_bar, self.prof_sub):
             w.bind("<Button-1>", lambda e: self.open_profile())
         tk.Frame(side, bg=T.hair(T.DEEP), height=1).pack(side="bottom", fill="x", padx=S4, pady=(0, S4))
 
@@ -502,14 +510,23 @@ class App:
         win = self._profile_win = tk.Toplevel(self.root)
         win.title("Profile")
         win.configure(bg=T.PAGE)
-        win.geometry("600x%d+%d+%d" % (500 + 84 * len(SHOP), self.root.winfo_rootx() + 280, self.root.winfo_rooty() + 10))
+        win.geometry("600x%d+%d+%d" % (520 + 84 * len(SHOP), self.root.winfo_rootx() + 280, self.root.winfo_rooty() + 10))
         win.transient(self.root)
         lab = lambda parent, text, fg=None, font=None, **kw: tk.Label(
             parent, text=text, bg=parent.cget("bg"), fg=fg or T.MUTED, font=font or (T.FONT, 9), anchor="w",
             justify="left", **kw)
-        lab(win, "Level %d · %s" % (pf.level(), pf.title()), T.TEXT, (T.FONT, 18)).pack(fill="x", padx=S6, pady=(S6, 0))
-        lab(win, "%d points earned · %d spent · %d to spend" % (pf.earned(), pf.spent(), pf.balance()), T.TEXT2,
-            (T.MONO, 10)).pack(fill="x", padx=S6, pady=(S2, 0))
+        top = tk.Frame(win, bg=T.PAGE)
+        top.pack(fill="x", padx=S6, pady=(S6, 0))
+        win._pic = avatars.image(tk, self.store.settings.get("avatar"), 64)
+        pic = tk.Label(top, image=win._pic, bg=T.PAGE, bd=0, cursor="hand2")
+        pic.pack(side="left", anchor="n")
+        pic.bind("<Button-1>", lambda e: self.pick_avatar())
+        T.button(tk, top, "Change picture", self.pick_avatar, kind="quiet").pack(side="right", anchor="n")
+        col = tk.Frame(top, bg=T.PAGE)
+        col.pack(side="left", fill="x", expand=True, padx=(S4, 0))
+        lab(col, "Level %d · %s" % (pf.level(), pf.title()), T.TEXT, (T.FONT, 18)).pack(fill="x")
+        lab(col, "%d points earned · %d spent · %d to spend" % (pf.earned(), pf.spent(), pf.balance()), T.TEXT2,
+            (T.MONO, 10)).pack(fill="x", pady=(S2, 0))
         bar = tk.Canvas(win, height=4, bg=T.RAISED, highlightthickness=0, width=552)
         bar.pack(padx=S6, pady=(S3, 0), anchor="w")
         into, span = pf.level_progress()
@@ -578,6 +595,103 @@ class App:
             else:
                 lab(side, "%d points" % item["price"], T.TEXT2, (T.MONO, 10), ).pack(anchor="e")
                 lab(side, why).pack(anchor="e")
+
+    # -- profile picture ---------------------------------------------------------
+    def set_avatar(self):
+        self._pic = avatars.image(self.tk, self.store.settings.get("avatar"), 48)
+        self.prof_pic.configure(image=self._pic)
+
+    def pick_avatar(self):
+        """Twenty built-in portraits, or the player's own PNG or GIF."""
+        tk = self.tk
+        win = tk.Toplevel(self.root)
+        win.title("Profile picture")
+        win.configure(bg=T.PAGE)
+        win.transient(self.root)
+        win.geometry("+%d+%d" % (self.root.winfo_rootx() + 320, self.root.winfo_rooty() + 80))
+        cur = self.store.settings.get("avatar")
+        cur_id = cur.get("id", 0) if avatars.setting_ok(cur) and "file" not in cur else (None if avatars.setting_ok(cur) else 0)
+        tk.Label(win, text="Profile picture", bg=T.PAGE, fg=T.TEXT, font=(T.FONT, 14), anchor="w").pack(
+            fill="x", padx=T.S6, pady=(T.S6, 0))
+        tk.Label(win, text="Shown in the library on this computer", bg=T.PAGE, fg=T.MUTED, font=(T.FONT, 9),
+                 anchor="w").pack(fill="x", padx=T.S6, pady=(2, T.S3))
+        grid = tk.Frame(win, bg=T.PAGE)
+        grid.pack(padx=T.S6)
+        win._imgs = []
+
+        def choose(setting):
+            self.store.settings["avatar"] = setting
+            self.store.save()
+            self.set_avatar()
+            win.destroy()
+            if self._profile_win is not None and self._profile_win.winfo_exists():
+                self.open_profile()
+
+        for i, spec in enumerate(avatars.BUILT_IN):
+            img = avatars.image(tk, {"id": i}, 64)
+            win._imgs.append(img)
+            cell = tk.Frame(grid, bg=T.PAGE, cursor="hand2", highlightthickness=1,
+                            highlightbackground=T.TEXT if i == cur_id else T.PAGE)
+            cell.grid(row=i // 5, column=i % 5, padx=T.S1, pady=T.S1)
+            a = tk.Label(cell, image=img, bg=T.PAGE, bd=0)
+            a.pack(padx=T.S1, pady=(T.S1, 0))
+            b = tk.Label(cell, text=spec[0], bg=T.PAGE, fg=T.TEXT2 if i == cur_id else T.MUTED, font=(T.FONT, 9))
+            b.pack(pady=(2, T.S1))
+            for w in (cell, a, b):
+                w.bind("<Button-1>", lambda e, i=i: choose({"id": i}))
+        row = tk.Frame(win, bg=T.PAGE)
+        row.pack(fill="x", padx=T.S6, pady=(T.S4, T.S6))
+        note = tk.Label(row, text="Or use a picture of your own (PNG or GIF). It is copied to your RetroCompanion "
+                                  "folder and is not sent anywhere", bg=T.PAGE, fg=T.MUTED, font=(T.FONT, 9),
+                        anchor="w", justify="left", wraplength=380)
+
+        def own():
+            from tkinter import filedialog
+            path = filedialog.askopenfilename(parent=win, title="Choose a picture",
+                                              filetypes=[("Pictures", "*.png *.gif"), ("All files", "*")])
+            if not path:
+                return
+            res = avatars.keep(path)
+            if isinstance(res, dict):
+                try:
+                    tk.PhotoImage(file=res["file"])
+                except tk.TclError:
+                    res = "That file could not be read as a PNG or GIF picture"
+            if isinstance(res, dict):
+                choose(res)
+            else:
+                note.configure(text=res, fg=T.NEG)
+
+        T.button(tk, row, "Choose a picture file", own).pack(side="right", anchor="n")
+        note.pack(side="left", fill="x", expand=True, padx=(0, T.S3))
+
+    # -- what is new ---------------------------------------------------------------
+    def open_news(self):
+        tk = self.tk
+        win = tk.Toplevel(self.root)
+        win.title("What's new")
+        win.configure(bg=T.PAGE)
+        win.transient(self.root)
+        win.geometry("560x560+%d+%d" % (self.root.winfo_rootx() + 300, self.root.winfo_rooty() + 40))
+        tk.Label(win, text="What's new", bg=T.PAGE, fg=T.TEXT, font=(T.FONT, 14), anchor="w").pack(
+            fill="x", padx=T.S6, pady=(T.S6, T.S2))
+        box = tk.Frame(win, bg=T.PAGE)
+        box.pack(fill="both", expand=True, padx=(T.S6, T.S2), pady=(0, T.S6))
+        t = tk.Text(box, bg=T.PAGE, fg=T.TEXT2, bd=0, highlightthickness=0, wrap="word", font=(T.FONT, 10),
+                    cursor="arrow", padx=0, pady=0, spacing1=2, spacing3=4)
+        sb = T.Scroll(tk, box, t)
+        t.configure(yscrollcommand=sb.set)
+        sb.c.pack(side="right", fill="y")
+        t.pack(side="left", fill="both", expand=True)
+        t.tag_configure("date", foreground=T.MUTED, font=(T.MONO, 9), spacing1=T.S4)
+        t.tag_configure("head", foreground=T.TEXT, font=(T.FONT, 12))
+        t.tag_configure("item", lmargin1=T.S4, lmargin2=T.S4)
+        for n in NEWS:
+            t.insert("end", n["date"] + "\n", "date")
+            t.insert("end", n["title"] + "\n", "head")
+            for it in n["items"]:
+                t.insert("end", it + "\n", "item")
+        t.configure(state="disabled")
 
     def shop(self, item, what):
         pf = self.profile
