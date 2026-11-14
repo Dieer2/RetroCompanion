@@ -101,6 +101,8 @@ class GamePlugin:
              map       map spec, see companion/overlay.py MapView
              short     {stats, nav}   one short line each, for the compact modules (optional;
                                       battle may carry its own "short")
+             tips      {name: [str]}  what a named thing is (an item, a weapon, a spell): shown
+                                      when the pointer rests on a line of the overlay that names it
            ctx.step is the step being shown, ctx.zoom the map zoom toggle. state may be None
            (no connection): then return whatever static help makes sense."""
         return {}

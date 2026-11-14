@@ -18,6 +18,9 @@ An earned achievement is announced by a pop-up that slides in at the top centre 
 (Popup) with the companion's own chime (sound.py), and carries a trophy in its grade's colour
 in the achievements module. The map module opens the full-size map (atlas.py).
 
+Resting the pointer on a line that names something the plugin has a tip for (an item, a
+weapon, a spell: view()["tips"]) shows what it is in a small window beside the module.
+
 Every module has a compact form (the two chevrons in its header, or C for all of them): no
 header, one strip with an icon and the main figures, so the game stays visible. The button
 at the end of the strip, or a double-click on it, brings the full module back.
@@ -31,8 +34,10 @@ with a height limit, so a long list scrolls instead of running off the screen. U
 docked: it sits in a column under the guide and follows it. Moving it tears it off; "Reset
 layout" in the right-click menu docks everything again. Layout is saved per game.
 """
+import re
 import sys
 import time
+from tkinter import font as tkfont
 
 from . import sound
 from . import theme as T
@@ -210,6 +215,8 @@ class Panel:
         T.IconButton(tk, self.strip, "expand", self.toggle_compact).c.pack(side="right", anchor="n")
         self.stext = tk.Label(self.strip, bg=T.CARD, fg=T.TEXT, justify="left", anchor="w")
         self.stext.pack(side="left", fill="x", expand=True, padx=(T.S2, 0), pady=2)
+        self._hover(self.stext)
+        self._hover(self.title)
         self.h = self.body_h = self.view_h = 0
 
         # resize handles: right edge = width, bottom edge = height, corner = both
@@ -328,6 +335,7 @@ class Panel:
             lbl = self.tk.Label(self.body, bg=T.CARD, justify="left", anchor="w")
             lbl._act = None
             lbl.bind("<Button-1>", lambda e, l=lbl: l._act and self.ov.action(l._act))
+            self._hover(lbl)
             self._labels.append(lbl)
         return self._labels[i]
 
@@ -339,8 +347,15 @@ class Panel:
             c.pack(side="left", anchor="n", pady=1)
             lbl = self.tk.Label(f, bg=T.CARD, justify="left", anchor="w")
             lbl.pack(side="left", fill="x", expand=True, padx=(T.S2, 0))
+            self._hover(lbl)
             self._irows.append((f, c, lbl))
         return self._irows[i]
+
+    def _hover(self, lbl):
+        """The pointer on a line shows what the things named in it are."""
+        lbl.bind("<Enter>", lambda e, l=lbl: self.ov.tip_show(self, l, e), add="+")
+        lbl.bind("<Motion>", lambda e, l=lbl: self.ov.tip_show(self, l, e), add="+")
+        lbl.bind("<Leave>", lambda e: self.ov.tip_hide(), add="+")
 
     def set(self, title, rows, dot=None, short=None):
         """rows: [R(...)]; an empty list hides the module. A row of kind "irow" has the value
@@ -572,6 +587,62 @@ class Popup:
             pass
 
 
+class Tip:
+    """What a named thing is: a small window beside the module the pointer is on."""
+    W = 300
+
+    def __init__(self, ov):
+        tk = self.tk = ov.tk
+        self.ov = ov
+        self.key = None
+        win = self.win = tk.Toplevel(ov.master)
+        win.withdraw()
+        win.configure(bg=T.hair(T.RAISED))
+        if sys.platform != "darwin":
+            win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        self.box = tk.Frame(win, bg=T.RAISED)
+        self.box.pack(fill="both", expand=True, padx=1, pady=1)
+        self.labels = []
+
+    def show(self, items, panel, y):
+        """items: [(name, lines)]."""
+        key = (tuple((n, tuple(ls)) for n, ls in items), panel.name)
+        if key != self.key:
+            self.key = key
+            n, wrap, used = self.ov.fsize, self.W - 2 - 2 * T.S3, 0
+            for lbl in self.labels:
+                lbl.pack_forget()
+            rows = []
+            for i, (name, lines) in enumerate(items):
+                rows.append((name, T.TEXT, (T.FONT, n), T.S3 if i else 0))
+                rows += [(ln, T.TEXT2, (T.FONT, n - 1), 2) for ln in lines]
+            for k, (text, fg, font, top) in enumerate(rows):
+                if used == len(self.labels):
+                    self.labels.append(self.tk.Label(self.box, bg=T.RAISED, anchor="w", justify="left"))
+                lbl = self.labels[used]
+                used += 1
+                lbl.configure(text=text, fg=fg, font=font, wraplength=wrap)
+                lbl.pack(fill="x", padx=T.S3, pady=(top if k else T.S2, T.S2 if k == len(rows) - 1 else 0))
+            self.win.update_idletasks()
+        h = self.win.winfo_reqheight()
+        px, pw = panel.win.winfo_rootx(), panel.win.winfo_width()
+        sw, sh = self.win.winfo_screenwidth(), self.win.winfo_screenheight()
+        x = px + pw + T.S1 if px + pw + T.S1 + self.W <= sw else px - T.S1 - self.W      # beside the module, never over it
+        self.win.geometry("%dx%d+%d+%d" % (self.W, h, max(0, x), max(0, min(y - 12, sh - h - 48))))
+        self.win.deiconify()
+        self.win.attributes("-topmost", True)
+
+    def hide(self):
+        self.win.withdraw()
+
+    def destroy(self):
+        try:
+            self.win.destroy()
+        except self.tk.TclError:
+            pass
+
+
 class Overlay:
     def __init__(self, tk, master, plugin, progress, ui, save_ui, on_close, ach=None, modules=(), log=None,
                  look=None):
@@ -598,6 +669,9 @@ class Overlay:
         self.toasts = []            # achievements waiting to be shown; the first one is on screen
         self._toast_timer = None
         self.popup = Popup(self)
+        self.tips, self._tip_re, self._tip_names = {}, None, None       # what the plugin can explain
+        self._fonts = {}            # font description -> Font, for finding the word under the pointer
+        self.tipwin = Tip(self)
         self.atlas = None           # the full-size map window, while it is open
 
         m = self.menu = tk.Menu(master, tearoff=0)
@@ -673,6 +747,55 @@ class Overlay:
         if self.ui.get("sound", True):
             sound.play(look.get("chime", "trophy"))
         self._toast_timer = self.master.after(TOAST_MS, lambda: self.action("toast_next"))
+
+    def char_at(self, lbl, x, y):
+        """Index into a label's text of the character under a point of it (the label wraps at spaces)."""
+        key = str(lbl.cget("font"))
+        f = self._fonts.get(key)
+        if f is None:
+            f = self._fonts[key] = tkfont.Font(root=self.master, font=lbl.cget("font"))
+        text = lbl.cget("text")
+        wrap = int(lbl.cget("wraplength")) or 10 ** 6
+        lines, pos = [], 0
+        for para in text.split("\n"):
+            start, cur = pos, ""
+            for word in re.split(r"(\s+)", para):
+                if cur.strip() and word.strip() and f.measure(cur + word) > wrap:
+                    lines.append((start, cur))
+                    start, cur = start + len(cur), word
+                else:
+                    cur += word
+            lines.append((start, cur))
+            pos += len(para) + 1
+        start, s = lines[max(0, min(len(lines) - 1, (y - 2) // max(1, f.metrics("linespace"))))]
+        for i in range(1, len(s) + 1):
+            if f.measure(s[:i]) >= x:
+                return start + i - 1
+        return start + len(s)
+
+    def tip_show(self, panel, lbl, e):
+        """Show what the thing under the pointer is (one of the names the plugin gave tips for)."""
+        text = lbl.cget("text")
+        if not self.tips or not text:
+            return
+        names = tuple(sorted(self.tips, key=len, reverse=True))
+        if names != self._tip_names:            # longest first, whole words only: "Herb" is not in "Herbs"
+            self._tip_names = names
+            self._tip_re = re.compile(r"(?<![A-Za-z])(%s)(?![A-Za-z])" % "|".join(re.escape(n) for n in names))
+        found = [(m.start(), m.end(), m.group(1)) for m in self._tip_re.finditer(text) if self.tips[m.group(1)]]
+        if not found:
+            self.tipwin.hide()
+            return
+        at = self.char_at(lbl, e.x, e.y)        # the name under the pointer, else the nearest one in the line
+        name = min(found, key=lambda m: 0 if m[0] <= at < m[1] else min(abs(at - m[0]), abs(at - m[1])))[2]
+        lines = list(self.tips[name])
+        others = len({m[2] for m in found}) - 1
+        if others:
+            lines.append("This line names %d more: move along it" % others)
+        self.tipwin.show([(name, lines)], panel, lbl.winfo_rooty())
+
+    def tip_hide(self):
+        self.tipwin.hide()
 
     def _groups(self):
         groups = []
@@ -761,6 +884,7 @@ class Overlay:
         if self._toast_timer is not None:
             self.master.after_cancel(self._toast_timer)
         self.popup.destroy()
+        self.tipwin.destroy()
         if self.atlas is not None:
             self.atlas.close()
         for p in self.panels.values():
@@ -785,6 +909,7 @@ class Overlay:
         ctx = self.ctx()
         idx, step = ctx.index, ctx.step
         pv = p.view(g, ctx) or {}
+        self.tips = pv.get("tips") or {}
 
         rows = []
         if g is not None:

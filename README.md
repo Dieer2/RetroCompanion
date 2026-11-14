@@ -62,6 +62,11 @@ newest first: enemies beaten, levels gained, items found, steps finished, achiev
 It is kept on this computer. Both lists scroll with the mouse wheel. An earned achievement
 carries a trophy in the colour of its grade.
 
+Rest the pointer on a line of the overlay that names a weapon, an armor, a shield, an item or
+a spell, and a small window beside the module tells what it does: its attack or defense, how
+that compares with what you wear, the price, whether you have the gold, where it is sold
+and what a shop pays for it. It follows the word under the pointer.
+
 ## The full-size map
 
 F, or the corner icon in the map module's header, opens one large window with the whole
@@ -223,6 +228,7 @@ A plugin provides:
 | `step_done(step, state, seen)` | is a step finished |
 | `observe(state, seen)` | remember facts memory forgets (places visited) |
 | `view(state, ctx)` | what the overlay shows: stats, battle, directions, notes, map |
+| `view()["tips"]` | `{name: [lines]}`: what a named thing is, shown when the pointer rests on a line naming it |
 | `atlas(state, ctx)` | the full-size map: every map, its marks with a status, filters (see `companion/atlas.py`) |
 | `summary(state)`, `banner()` | library extras |
 | `data_status()`, `prepare(rom_path)` | for tables read from the player's own ROM instead of being shipped |

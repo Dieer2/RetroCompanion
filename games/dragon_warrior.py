@@ -114,6 +114,115 @@ ITEMS = {1: "Torch", 2: "Fairy Water", 3: "Wings", 4: "Dragon's Scale", 5: "Fair
          6: "Fighter's Ring", 7: "Erdrick's Token", 8: "Gwaelin's Love", 9: "Cursed Belt",
          10: "Silver Harp", 11: "Death Necklace", 12: "Stones of Sunlight", 13: "Staff of Rain",
          14: "Rainbow Drop"}
+# What the gear is worth. Checked against the game's own tables in the owner's ROM (2026-11-14):
+# weapon, armor and shield bonuses at PRG offset 0x19CF / 0x19D7 / 0x19DF, shop prices at 0x1947
+# (16-bit each); a shop buys an item back for half its price.
+ATK_BONUS = [0, 2, 4, 10, 15, 20, 28, 40]
+DEF_ARMOR = [0, 2, 4, 10, 16, 24, 24, 28]
+DEF_SHIELD = [0, 4, 10, 20]
+PRICE = {"Bamboo Pole": 10, "Club": 60, "Copper Sword": 180, "Hand Axe": 560, "Broad Sword": 1500, "Flame Sword": 9800,
+         "Erdrick's Sword": 2, "Clothes": 20, "Leather Armor": 70, "Chain Mail": 300, "Half Plate": 1000,
+         "Full Plate": 3000, "Magic Armor": 7700, "Erdrick's Armor": 2, "Small Shield": 90, "Large Shield": 800,
+         "Silver Shield": 14800, "Herb": 24, "Torch": 8, "Fairy Water": 38, "Wings": 70, "Dragon's Scale": 20,
+         "Fighter's Ring": 30, "Cursed Belt": 360, "Death Necklace": 2400}
+# who sells what (the same lists as the town notes below)
+SHOPS = {
+    "Brecconary": ["Bamboo Pole", "Club", "Copper Sword", "Clothes", "Leather Armor", "Small Shield", "Herb", "Torch",
+                   "Dragon's Scale", "Fairy Water"],
+    "Garinham": ["Club", "Copper Sword", "Hand Axe", "Leather Armor", "Chain Mail", "Half Plate", "Large Shield", "Herb",
+                 "Torch", "Dragon's Scale"],
+    "Kol": ["Copper Sword", "Hand Axe", "Half Plate", "Full Plate", "Small Shield", "Herb", "Torch", "Dragon's Scale", "Wings"],
+    "Rimuldar": ["Copper Sword", "Hand Axe", "Broad Sword", "Half Plate", "Full Plate", "Magic Armor"],
+    "Cantlin": ["Flame Sword", "Silver Shield", "Broad Sword", "Full Plate", "Magic Armor", "Hand Axe", "Large Shield",
+                "Chain Mail", "Fairy Water", "Herb", "Torch", "Dragon's Scale", "Wings"],
+}
+# what a thing does, beyond its numbers
+ITEM_NOTES = {
+    "Magic Armor": ["Restores 1 HP every 4 steps", "Takes a third off HURT and HURTMORE damage"],
+    "Erdrick's Armor": ["Restores 1 HP every step", "No damage from swamp and barriers",
+                        "Takes a third off fire and HURT damage", "Buried in Hauksness: SEARCH on the tree tile after the Axe Knight"],
+    "Erdrick's Sword": ["The strongest weapon. In a chest in Charlock, in the closed middle room of B2"],
+    "Herb": ["Restores 23 to 30 HP", "You can carry 6"],
+    "Magic Key": ["Opens one locked door, then it is gone", "You can carry 6",
+                  "53 G in Rimuldar, 85 G in Tantegel, 98 G in Cantlin"],
+    "Torch": ["Lights the tiles next to you in a cave", "RADIANT (level 9) lights more"],
+    "Fairy Water": ["Keeps weak monsters away for a while, like REPEL"],
+    "Wings": ["Takes you back to Tantegel Castle", "Does not work inside caves"],
+    "Dragon's Scale": ["Defense +2 once you USE it", "Wear it right after buying"],
+    "Fairy Flute": ["Puts the Golem at Cantlin's gate to sleep (use it in the battle)",
+                    "Found in Kol: SEARCH 4 tiles south of the bath"],
+    "Fighter's Ring": ["No effect in the NES version (a known bug)", "Chest in the Mountain Cave, B2"],
+    "Erdrick's Token": ["Proof that you are Erdrick's heir", "One of the three things the Southern Shrine asks for",
+                        "Found in the swamp 70 south, 40 east of Tantegel"],
+    "Gwaelin's Love": ["Tells how far you are from Tantegel and the XP to your next level", "From the princess, once she is home"],
+    "Cursed Belt": ["Cursed: do not use it", "A curse is lifted in Brecconary"],
+    "Death Necklace": ["Cursed: do not use it", "A curse is lifted in Brecconary"],
+    "Silver Harp": ["Played, it calls a monster", "The old man of the Northern Shrine trades the Staff of Rain for it",
+                    "Chest in Garin's Grave"],
+    "Stones of Sunlight": ["One of the three things the Southern Shrine asks for", "Chest in the cellar of Tantegel Castle"],
+    "Staff of Rain": ["One of the three things the Southern Shrine asks for", "From the Northern Shrine, for the Silver Harp"],
+    "Rainbow Drop": ["Used at the tip of the peninsula north-west of Rimuldar, it makes the bridge to Charlock",
+                     "From the Southern Shrine"],
+}
+SPELL_NOTES = {
+    "HEAL": "Restores 10 to 17 HP", "HURT": "5 to 12 damage", "SLEEP": "Puts the enemy to sleep",
+    "RADIANT": "Lights a cave, wider than a Torch; it fades as you walk", "STOPSPELL": "Stops the enemy's spells",
+    "OUTSIDE": "Takes you out of a cave", "RETURN": "Takes you back to Tantegel Castle",
+    "REPEL": "Keeps weak monsters away for a while", "HEALMORE": "Restores 85 to 100 HP", "HURTMORE": "58 to 65 damage",
+}
+
+
+def item_tips(g):
+    """name -> lines: what every weapon, armor, shield, item and spell does, set against what the hero has."""
+    tips = {}
+
+    def money(name, lines):
+        price = PRICE.get(name)
+        towns = [t for t, stock in SHOPS.items() if name in stock]
+        if towns:
+            lines.append("%d G · sold in %s" % (price, ", ".join(towns)))
+            if g is not None:
+                lines.append("You have %d G: %s" % (g.gold, "enough" if g.gold >= price else "%d G short" % (price - g.gold)))
+        if price:
+            lines.append("A shop pays %d G for it" % (price // 2))
+
+    for names, table, stat, mine in ((WEAPONS, ATK_BONUS, "Attack", None if g is None else g.weapon),
+                                     (ARMORS, DEF_ARMOR, "Defense", None if g is None else g.armor),
+                                     (SHIELDS, DEF_SHIELD, "Defense", None if g is None else g.shield)):
+        kind = {id(WEAPONS): "Weapon", id(ARMORS): "Armor", id(SHIELDS): "Shield"}[id(names)]
+        for i, name in enumerate(names):
+            if i == 0:
+                tips[name] = ["Nothing in this slot: %s +0" % stat.lower()]
+                continue
+            lines = ["%s · %s +%d" % (kind, stat.lower(), table[i])]
+            if mine is not None:
+                d = table[i] - table[mine]
+                lines.append("You are wearing it" if i == mine else "%s%d %s against your %s (+%d)" % (
+                    "+" if d >= 0 else "", d, stat.lower(), names[mine] if mine else "empty slot", table[mine]))
+            lines += ITEM_NOTES.get(name, [])
+            money(name, lines)
+            tips[name] = lines
+    for name in ["Herb", "Magic Key"] + list(ITEMS.values()):
+        lines = list(ITEM_NOTES.get(name, []))
+        if g is not None:
+            have = {"Herb": g.herbs, "Magic Key": g.keys}.get(name)
+            if have is not None:
+                lines.append("You carry %d" % have)
+            elif name in [ITEMS[i] for i in g.items if i in ITEMS]:
+                lines.append("You carry one")
+        money(name, lines)
+        tips[name] = lines
+    cost = DATA["cost"] if DATA else [4, 2, 2, 3, 2, 6, 8, 2, 10, 5]
+    level = {v: k for k, v in SPELLS.items()}
+    for i, name in enumerate(SPELL_ORDER):
+        lines = ["Spell · %d MP · learned at level %d" % (cost[i], level[name]), SPELL_NOTES[name]]
+        if g is not None:
+            lines.append("You know it: %d MP is enough for %d" % (g.mp, g.mp // cost[i]) if name in g.spells
+                         else "Not learned yet")
+        tips[name] = lines
+    return tips
+
+
 ENEMIES = ("Slime,Red Slime,Drakee,Ghost,Magician,Magidrakee,Scorpion,Druin,Poltergeist,Droll,Drakeema,"
            "Skeleton,Warlock,Metal Scorpion,Wolf,Wraith,Metal Slime,Specter,Wolflord,Druinlord,Drollmagi,"
            "Wyvern,Rogue Scorpion,Wraith Knight,Golem,Goldman,Knight,Magiwyvern,Demon Knight,Werewolf,"
@@ -1352,8 +1461,8 @@ class DragonWarrior(GamePlugin):
         step = ctx.step
         goal = step.get("goal")
         if g is None:
-            return {"nav": [describe(step, None)]}
-        v = {}
+            return {"nav": [describe(step, None)], "tips": item_tips(None)}
+        v = {"tips": item_tips(g)}
         loc = MAPS.get(g.map, "?")
         v["location"] = loc + ("  (%s)" % rel_tant(g.x, g.y) if g.map == 0x01 else "  (%d,%d)" % (g.x, g.y))
         v["stats"], v["gear"], v["self"] = stats_line(g), gear_line(g), self_lines(g) + [self.run_line()]

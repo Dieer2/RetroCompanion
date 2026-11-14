@@ -427,4 +427,22 @@ except UP.UpdateError:
     pass
 assert "source" in UP.can_install()                                 # the tests run from source: nothing to replace
 rel.shutdown(); print("update OK")
+# tips: what the gear is worth, set against what the hero wears; every name a tip can be asked for exists
+tp = DW.item_tips(G(gold=600, equip=0x8E, hp=20, mp=9, level=9))          # Hand Axe, Chain Mail, Large Shield
+assert tp["Hand Axe"][:2] == ["Weapon · attack +15", "You are wearing it"]
+assert tp["Broad Sword"][:4] == ["Weapon · attack +20", "+5 attack against your Hand Axe (+15)",
+                                 "1500 G · sold in Rimuldar, Cantlin", "You have 600 G: 900 G short"]
+assert tp["Copper Sword"][1] == "-5 attack against your Hand Axe (+15)" and tp["Copper Sword"][-1] == "A shop pays 90 G for it"
+assert tp["Silver Shield"][1] == "+10 defense against your Large Shield (+10)" and "enough" in tp["Clothes"][3]
+assert tp["Erdrick's Armor"][0] == "Armor · defense +28" and tp["Magic Armor"][0] == "Armor · defense +24"
+assert tp["Herb"][0] == "Restores 23 to 30 HP" and "You carry 0" in tp["Herb"] and "24 G · sold in Brecconary, Garinham, Kol, Cantlin" in tp["Herb"]
+assert tp["HEAL"][0] == "Spell · 4 MP · learned at level 3" and tp["HEALMORE"][-1] == "Not learned yet"
+assert all(tp[n] for n in DW.WEAPONS + DW.ARMORS + DW.SHIELDS + list(DW.ITEMS.values()) + DW.SPELL_ORDER)
+assert all(n in DW.PRICE for stock in DW.SHOPS.values() for n in stock)
+assert [DW.PRICE[n] for n in DW.WEAPONS[1:]] == [10, 60, 180, 560, 1500, 9800, 2] and len(DW.ATK_BONUS) == len(DW.WEAPONS)
+for town, stock in DW.SHOPS.items():                                     # the shop lists agree with the town notes
+    notes = " ".join(DW.LOC[DW.TARGET_MAP[town]])
+    assert all("%s %d" % (n, DW.PRICE[n]) in notes for n in stock), town
+assert "tips" in P.view(None, Ctx(P.steps[0], 0, False)) and "You are wearing it" not in " ".join(DW.item_tips(None)["Club"])
+print("tips OK")
 print("ALL OK")

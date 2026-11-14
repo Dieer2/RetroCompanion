@@ -7,6 +7,12 @@ something on the website.
 """
 
 NEWS = [
+    dict(date="2026-11-14", title="Version 0.9", items=[
+        "Rest the pointer on a weapon, armor, shield, item or spell named anywhere in the overlay and a small "
+        "window tells what it does: attack or defense, how it compares with what you wear, its price, whether "
+        "you have the gold, where it is sold and what a shop pays for it. It works for what you carry and for "
+        "what the shops of a town sell",
+    ]),
     dict(date="2026-11-14", title="Version 0.8", items=[
         "The program updates itself. It looks for a new version when it starts, tells you at the bottom of "
         "the library when there is one, and \"Update and restart\" downloads it, checks it against the "
