@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Retro Companion admin</title>
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="bar">
+  <a class="mark" href="/"><img src="/img/dieergames.png" width="203" height="22" alt="DieerGames"></a>
+  <nav><a href="/">Site</a><a href="#" id="out" hidden>Sign out</a></nav>
+</header>
+
+<main class="admin">
+  <form id="gate" class="gate">
+    <h1>Admin</h1>
+    <label for="pw">Password</label>
+    <input id="pw" type="password" autocomplete="current-password" required>
+    <button class="btn" type="submit">Open</button>
+    <p class="status" id="gate-note"></p>
+  </form>
+
+  <div id="board" hidden>
+    <div class="admin-head">
+      <h1>Visits and downloads</h1>
+      <p class="sub" id="stamp"></p>
+    </div>
+
+    <table class="tiles">
+      <thead><tr><th></th><th class="num">Today</th><th class="num">7 days</th><th class="num">30 days</th><th class="num">All time</th></tr></thead>
+      <tbody id="tiles"></tbody>
+    </table>
+
+    <section>
+      <h2>Where visitors came from</h2>
+      <p class="sub">Page views in the last 30 days. "direct" means a typed address, a bookmark or an app that hides the source.
+        A link such as retro.dieergames.hu/?ref=reddit shows up here as "reddit".</p>
+      <table><thead><tr><th>Source</th><th class="num">Views</th><th class="bar-col"></th></tr></thead><tbody id="sources"></tbody></table>
+    </section>
+
+    <section>
+      <h2>Pages</h2>
+      <p class="sub">Page views in the last 30 days.</p>
+      <table><thead><tr><th>Page</th><th class="num">Views</th><th class="bar-col"></th></tr></thead><tbody id="pages"></tbody></table>
+    </section>
+
+    <section>
+      <h2>Accounts</h2>
+      <table><tbody id="accounts"></tbody></table>
+    </section>
+
+    <section>
+      <h2>Day by day</h2>
+      <p class="sub">Days are counted in UTC. A visitor counts once a day, a download once per visitor a day.</p>
+      <table class="compact"><thead><tr><th>Day</th><th class="num">Visitors</th><th class="num">Views</th><th class="num">Downloads</th><th class="bar-col"></th></tr></thead>
+        <tbody id="days"></tbody></table>
+      <div class="pager">
+        <button type="button" class="btn quiet" id="newer">Newer</button>
+        <button type="button" class="btn quiet" id="older">Older</button>
+        <span class="meta" id="page-note"></span>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY = "rc-admin";
+  function el(tag, text, cls) { var e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; }
+  function row(cells) { var tr = el("tr"); cells.forEach(function (c) { tr.appendChild(c); }); return tr; }
+  function num(n) { return el("td", Number(n).toLocaleString("en-US"), "num"); }
+  function bar(n, max) { var td = el("td", undefined, "bar-col"), b = el("span", undefined, "bar-fill"); b.style.width = (max ? Math.round(100 * n / max) : 0) + "%"; td.appendChild(b); return td; }
+  function fill(id, rows) { var t = $(id); t.textContent = ""; rows.forEach(function (r) { t.appendChild(r); }); }
+  function sum(days, key, n) { return days.slice(0, n).reduce(function (a, d) { return a + d[key]; }, 0); }
+
+  var allDays = [], page = 0, PER = 7;
+  function showDays() {
+    var pages = Math.max(1, Math.ceil(allDays.length / PER));
+    page = Math.min(Math.max(page, 0), pages - 1);
+    var part = allDays.slice(page * PER, page * PER + PER);
+    var top = Math.max.apply(null, allDays.map(function (x) { return x.visitors; }).concat([1]));   // one scale on every page
+    fill("days", part.map(function (x) { return row([el("td", x.day, "day"), num(x.visitors), num(x.views), num(x.downloads), bar(x.visitors, top)]); }));
+    $("newer").disabled = page === 0; $("older").disabled = page >= pages - 1;
+    $("page-note").textContent = part.length ? part[part.length - 1].day + " to " + part[0].day + " · page " + (page + 1) + " of " + pages : "";
+  }
+  $("newer").addEventListener("click", function () { page -= 1; showDays(); });
+  $("older").addEventListener("click", function () { page += 1; showDays(); });
+
+  function show(d) {
+    var days = d.days;
+    fill("tiles", [["Visitors", "visitors"], ["Page views", "views"], ["Downloads", "downloads"]].map(function (m) {
+      return row([el("td", m[0]), num(days[0][m[1]]), num(sum(days, m[1], 7)), num(sum(days, m[1], 30)), num(d.total[m[1]])]);
+    }));
+    var top = Math.max.apply(null, d.sources.map(function (s) { return s.views; }).concat([1]));
+    fill("sources", d.sources.length ? d.sources.map(function (s) { return row([el("td", s.ref), num(s.views), bar(s.views, top)]); })
+      : [row([el("td", "No visits counted yet", "dim")])]);
+    top = Math.max.apply(null, d.pages.map(function (p) { return p.views; }).concat([1]));
+    fill("pages", d.pages.length ? d.pages.map(function (p) { return row([el("td", p.page), num(p.views), bar(p.views, top)]); })
+      : [row([el("td", "No visits counted yet", "dim")])]);
+    var a = d.accounts;
+    fill("accounts", [["Accounts", a.all], ["New in the last 30 days", a.new_30d], ["On the leaderboard", a.on_board], ["Supporters", a.supporters]]
+      .map(function (m) { return row([el("td", m[0]), num(m[1])]); }));
+    allDays = days; page = 0; showDays();
+    $("stamp").textContent = "Server version " + d.version + ". Loaded " + new Date().toLocaleTimeString() + ".";
+    $("gate").hidden = true; $("board").hidden = false; $("out").hidden = false;
+  }
+
+  function load(pw, quiet) {
+    return fetch("/api/admin/stats", { headers: { Authorization: "Bearer " + pw }, cache: "no-store" }).then(function (r) {
+      return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "The server answered with an error"); return d; });
+    }).then(function (d) { sessionStorage.setItem(KEY, pw); show(d); }).catch(function (e) {
+      sessionStorage.removeItem(KEY);
+      $("board").hidden = true; $("gate").hidden = false; $("out").hidden = true;
+      if (!quiet) $("gate-note").textContent = e.message;
+    });
+  }
+
+  $("gate").addEventListener("submit", function (ev) { ev.preventDefault(); $("gate-note").textContent = ""; load($("pw").value, false); });
+  $("out").addEventListener("click", function (ev) { ev.preventDefault(); sessionStorage.removeItem(KEY); location.reload(); });
+  var saved = sessionStorage.getItem(KEY);
+  if (saved) load(saved, true);
+})();
+</script>
+</body>
+</html>

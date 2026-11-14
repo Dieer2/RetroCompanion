@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retro Companion: live walkthroughs for RetroArch</title>
+<meta name="description" content="A free Windows program for RetroArch. It follows your game and keeps a live walkthrough and map in small windows above it.">
+<link rel="canonical" href="https://retro.dieergames.hu/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Retro Companion">
+<meta property="og:title" content="Retro Companion: live walkthroughs for RetroArch">
+<meta property="og:description" content="A free Windows program for RetroArch. It follows your game and keeps a live walkthrough and map in small windows above it.">
+<meta property="og:url" content="https://retro.dieergames.hu/">
+<meta property="og:image" content="https://retro.dieergames.hu/img/share.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/style.css">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Retro Companion", "description": "A free Windows program for RetroArch. It follows your game and keeps a live walkthrough and map in small windows above it.", "url": "https://retro.dieergames.hu/", "image": "https://retro.dieergames.hu/img/share.png", "applicationCategory": "GameApplication", "operatingSystem": "Windows", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}, "author": {"@type": "Person", "name": "Kemény Gergely"}}</script>
+</head>
+<body>
+<header class="bar">
+  <a class="mark" href="/"><img src="/img/dieergames.png" width="203" height="22" alt="DieerGames"></a>
+  <nav><a href="#features">Features</a><a href="/guides">Guides</a><a href="#leaderboard">Leaderboard</a><a href="/support">Support</a><a href="/privacy">Privacy</a></nav>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="copy">
+      <h1>Live walkthroughs for RetroArch players</h1>
+      <p class="lead">Retro Companion is a free Windows program. It reads the game you are playing in RetroArch
+        and follows your progress. The walkthrough and a map stay in small windows above the game.</p>
+      <p class="lead">Each game comes as a plugin with its own walkthrough and achievements. The first one is
+        Dragon Warrior. More games are coming soon.</p>
+      <div class="get">
+        <a class="btn" href="/api/download" download>Download for Windows</a>
+        <span class="meta">Version {{VERSION}} · {{SIZE}} MB · free</span>
+      </div>
+    </div>
+    <div class="demo" id="demo" role="img" aria-label="The overlay following one step: the hero walks six tiles to the Fairy Flute, the step is ticked off and the next one appears">
+      <div class="panel">
+        <div class="panel-head"><span class="live"></span><span id="d-count">Step 9 of 32</span></div>
+        <div class="panel-body" id="d-guide">
+          <p class="d-ch" id="d-ch">2 · The north</p>
+          <p class="d-title" id="d-title">Fairy Flute in Kol</p>
+          <p class="d-line" id="d-line">Stand exactly 4 tiles south of the bath and SEARCH</p>
+          <p class="d-route" id="d-route">Route: 6 steps</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span>Kol <span class="mono" id="d-xy">(9, 12)</span></span></div>
+        <div class="panel-body">
+          <p class="d-stats">Lv 9 · HP 50/58 · MP 20/36 · G 1290</p>
+          <p class="d-items" id="d-items">Items: Torch, Dragon's Scale</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span>Map</span></div>
+        <div class="d-map"><img src="/img/overlay-map.png" width="312" height="312" alt=""><span class="d-you" id="d-you"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="features">
+    <h2>What it does</h2>
+    <div class="grid">
+      <div><h3>A walkthrough that follows the game</h3>
+        <p>The app reads the game's memory and ticks off a step when you finish it. In Dragon Warrior it notices
+          when you find the Fairy Flute or beat the Golem.</p></div>
+      <div><h3>Map and route</h3>
+        <p>A live map shows where you are. It draws the way to the next goal, across towns and dungeon floors.</p></div>
+      <div><h3>Battle details</h3>
+        <p>In a fight you see the enemy's HP and the damage both sides can do. It also shows how likely SLEEP is
+          to work on that enemy.</p></div>
+      <div><h3>Windows above the game</h3>
+        <p>Each part is a small window of its own. You can move each window and change its size. Folded, it
+          shows only its title bar. The windows stay above RetroArch in windowed fullscreen.</p></div>
+      <div><h3>Achievements and trophies</h3>
+        <p>Every game has its own achievements, and each one is also a trophy graded by its points. Finishing all
+          achievements of a game earns its platinum trophy.</p></div>
+      <div><h3>Levels and a points shop</h3>
+        <p>Points from every game add up to your level. You can spend them in the app on colour themes and an extra
+          overlay window.</p></div>
+      <div><h3>Account and leaderboard</h3>
+        <p>With a free account your trophies follow you to any computer you sign in on. The leaderboard below
+          lists every player's points.</p></div>
+      <div><h3>Game library</h3>
+        <p>The library keeps play time and progress for each game. With your own MobyGames API key it also shows
+          release dates and descriptions.</p></div>
+    </div>
+  </section>
+
+  <section class="first">
+    <div class="first-copy">
+      <h2>First game: Dragon Warrior</h2>
+      <p class="sub">The NES original from 1989. The walkthrough has 32 steps from the throne room to the
+        Dragonlord, and the game has 50 achievements worth 940 points.</p>
+      <dl class="facts">
+        <div><dt>Game</dt><dd>Dragon Warrior (USA) · NES</dd></div>
+        <div><dt>Emulator</dt><dd>RetroArch with the Mesen core</dd></div>
+        <div><dt>System</dt><dd>Windows</dd></div>
+        <div><dt>Price</dt><dd>Free</dd></div>
+      </dl>
+      <p class="status">You need your own copy of the game. On first start the app asks for the ROM file and
+        reads the maps and monster tables from it.</p>
+      <p class="status">The program is not signed yet. If Windows says “Windows protected your PC”, click
+        More info, then Run anyway. SHA-256 <code>{{SHA256}}</code></p>
+    </div>
+    <figure class="shot wide">
+      <img src="/img/library.png" width="1040" height="720" alt="The library window with the Dragon Warrior walkthrough, the current step highlighted">
+    </figure>
+  </section>
+
+  <section class="guides-home">
+    <h2>Dragon Warrior guides</h2>
+    <p class="sub">The same facts the overlay uses, written out. Read from the game itself.</p>
+    <ul class="guide-links">
+      <li><a href="/guides/dragon-warrior-walkthrough">The whole game in 32 steps</a></li>
+      <li><a href="/guides/dragon-warrior-hidden-items">Where the hidden items are</a></li>
+      <li><a href="/guides/dragon-warrior-levels-spells">Level chart and every spell</a></li>
+      <li><a href="/guides/dragon-warrior-shops-prices">Every shop price, town by town</a></li>
+      <li><a href="/guides/dragon-warrior-game-code-facts">What the game's code says</a></li>
+      <li><a href="/guides/dragon-warrior-history">From Dragon Quest to Dragon Warrior</a></li>
+    </ul>
+  </section>
+
+  <section class="story">
+    <h2>Why it is free</h2>
+    <p>I play these old games myself. I built the features I wanted for my own playthroughs, and I thought
+      others might want them too. So the program is free for anyone.</p>
+    <p class="sign">Kemény Gergely</p>
+  </section>
+
+  <section class="support">
+    <h2>Support the project</h2>
+    <p>Each new game needs its own memory map and a walkthrough checked against sources. That takes time. The
+      server behind the accounts and the leaderboard has to be paid every month.</p>
+    <p>Support pays for this work and lets me add more games and features. If enough people chip in, I could
+      work on Retro Companion full time. Later I would also like to bring it to other platforms, where the
+      technology allows.</p>
+    <p>The program stays free for everyone. Supporters get their name on the supporters list, a mark on the
+      leaderboard and a vote on the next game.</p>
+    <div class="get"><a class="btn quiet" href="/support">How to support</a>
+      <span class="meta">Monthly from 3 euros, or any amount once</span></div>
+  </section>
+
+  <section id="leaderboard" class="board">
+    <div class="board-head">
+      <h2>Leaderboard</h2>
+      <p class="sub" id="board-note">Loading</p>
+    </div>
+    <table>
+      <thead><tr><th class="num">#</th><th>Player</th><th>Level</th><th>Trophies</th><th class="num">Points</th></tr></thead>
+      <tbody id="board"></tbody>
+    </table>
+  </section>
+</main>
+
+<footer>
+  <p>Retro Companion has no connection to Square Enix or Nintendo. Game names belong to their owners.
+    This site does not distribute ROMs.</p>
+  <p><a href="/guides">Guides</a> · <a href="/support">Support</a> · <a href="/privacy">Privacy</a></p>
+</footer>
+
+<script>
+(function () {
+  var body = document.getElementById("board"), note = document.getElementById("board-note");
+  var grades = ["platinum", "gold", "silver", "bronze"];
+  function cell(tr, text, cls) { var td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls; tr.appendChild(td); }
+  fetch("/api/leaderboard?limit=50").then(function (r) { return r.json(); }).then(function (d) {
+    var players = d.players || [];
+    note.textContent = players.length
+      ? d.total + (d.total === 1 ? " player" : " players") + ". The server counts the points from the achievements each player has unlocked."
+      : "Nobody is on the board yet. Create an account in the app's profile window. Your first achievement puts you on it.";
+    players.forEach(function (p) {
+      var tr = document.createElement("tr"), t = p.trophies || {};
+      cell(tr, p.rank, "num");
+      cell(tr, p.name, "name");
+      if (p.supporter) { var s = document.createElement("span"); s.className = "sup"; s.textContent = "supporter"; tr.lastChild.appendChild(s); }
+      cell(tr, "Level " + p.level + " · " + p.title, "dim");
+      cell(tr, grades.filter(function (g) { return t[g]; }).map(function (g) { return t[g] + " " + g; }).join(" · ") || "none", "dim");
+      cell(tr, p.points.toLocaleString("en-US"), "num");
+      body.appendChild(tr);
+    });
+  }).catch(function () { note.textContent = "The leaderboard did not load. Reload the page in a minute."; });
+})();
+</script>
+<script src="/motion.js" defer></script>
+<script src="/hit.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eight things the code of Dragon Warrior says about how the game works</title>
+<meta name="description" content="What happens when you die, why level 30 stops at 65,535, how damage is worked out, and other rules of Dragon Warrior read from the game&#x27;s own code and memory.">
+<link rel="canonical" href="https://retro.dieergames.hu/guides/dragon-warrior-game-code-facts">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Retro Companion">
+<meta property="og:title" content="Eight things the code of Dragon Warrior says about how the game works">
+<meta property="og:description" content="What happens when you die, why level 30 stops at 65,535, how damage is worked out, and other rules of Dragon Warrior read from the game&#x27;s own code and memory.">
+<meta property="og:url" content="https://retro.dieergames.hu/guides/dragon-warrior-game-code-facts">
+<meta property="og:image" content="https://retro.dieergames.hu/img/share.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="bar">
+  <a class="mark" href="/"><img src="/img/dieergames.png" width="203" height="22" alt="DieerGames"></a>
+  <nav><a href="/#features">Features</a><a href="/guides">Guides</a><a href="/#leaderboard">Leaderboard</a><a href="/support">Support</a><a href="/privacy">Privacy</a></nav>
+</header>
+<main class="doc article">
+  <p class="crumb"><a href="/guides">Guides</a> · Dragon Warrior</p>
+  <h1>Eight things the code of Dragon Warrior says about how the game works</h1>
+  <p>Retro Companion follows a game by reading its memory. To build that for Dragon Warrior, the game's code had to be read first. Some of what it says settles old questions that guides answer in different ways. Everything below is from Dragon Warrior (USA) on the NES. Addresses are given for readers who want to check them.</p>
+  <h2>1. Dying costs half your gold, and the princess</h2>
+  <p>The routine that runs when your hit points reach zero is at <span class="mono">$EDBB</span>. It does two things to your save. It halves your gold. It also clears the flag that says you are carrying Princess Gwaelin, so if you die on the way back to the castle with her, you are no longer carrying her. Your experience, items and equipment are left alone.</p>
+  <p>This is why spending gold before a hard fight is always right. What you turned into a sword cannot be halved.</p>
+  <h2>2. Level 30 is a limit of the memory</h2>
+  <p>Your experience is kept in two bytes, at addresses <span class="mono">$BA</span> and <span class="mono">$BB</span>. Two bytes can hold numbers up to 65,535. The level table at <span class="mono">$F34B</span> has 30 entries, and the last one is exactly 65,535. The designers set the top level at the largest number the counter can hold.</p>
+  <h2>3. A won fight gives exactly the listed experience</h2>
+  <p>When a battle starts, the game copies the enemy's stats to address <span class="mono">$0100</span>. One of those bytes is the experience it is worth. When you win, that number is added to your total with nothing added or taken away.</p>
+  <p>The overlay uses this to count kills. If your experience rises by exactly the amount stored for the current enemy, that enemy was beaten.</p>
+  <h2>4. The Dragonlord is worth nothing</h2>
+  <p>Both forms of the Dragonlord have zero in the experience and gold fields. The game marks his defeat with a story flag instead. Three of these flags matter for the story: one for the Green Dragon that guards the princess, one for the Golem at Cantlin and one for the Dragonlord's true form. They are set between <span class="mono">$E95C</span> and <span class="mono">$E9E6</span>.</p>
+  <h2>5. There are 40 enemies, and 37 of them roam</h2>
+  <p>The enemy table has 40 entries. Thirty-seven appear in the random encounter groups. The Golem is the 38th and is met only once, at the gate of Cantlin. Outside the 37 it is the only enemy that gives experience, and it gives little: 5. The last two entries are the two forms of the Dragonlord.</p>
+  <p>The Green Dragon and the Axe Knight you meet at fixed places are ordinary entries from the 37. The Axe Knight in Hauksness comes back if you step off his tile and on again.</p>
+  <h2>6. Keys and Herbs stop at six</h2>
+  <p>The code compares your count with six before it adds a Magic Key or an Herb. The checks are at <span class="mono">$D7FB</span> and <span class="mono">$D6E7</span>. There is no way to carry a seventh.</p>
+  <h2>7. Hidden items are plain coordinate checks</h2>
+  <p>When you use SEARCH, the game compares the map you are on and your position with a short list. Kol at <span class="mono">(9, 6)</span> gives the Fairy Flute. Hauksness at <span class="mono">(18, 12)</span> gives Erdrick's Armor. The world map at <span class="mono">(83, 113)</span> gives Erdrick's Token. In Charlock, <span class="mono">(10, 1)</span> opens the hidden stairs. The Rainbow Drop works the same way: it does something only at <span class="mono">(65, 49)</span> on the world map.</p>
+  <p>Nothing about these tiles is stored in the map itself. That is why they look like any other tile.</p>
+  <h2>8. How damage is worked out</h2>
+  <p>Your attack power minus half of the enemy's defense gives a base number. A hit does between a quarter and a half of that base. If the base is below two, the hit does zero or one.</p>
+  <p>Enemy hits use the same idea with your defense, but with a floor. If your defense is high enough to push the base under about half of the enemy's attack power, the game stops using the base and rolls a small number instead. So no amount of armor brings an enemy's hits down to nothing.</p>
+  <p>For example, with attack power 40 against a Skeleton, whose defense is 22, the base is 40 minus 11, which is 29. Your hits do 7 to 14.</p>
+  <div class="tool" data-tool="damage"><div class="fields"><div><label for="d-atk">Your attack power</label><input id="d-atk" type="number" inputmode="numeric" min="0" max="255" placeholder="40"></div><div><label for="d-edef">Enemy defense</label><input id="d-edef" type="number" inputmode="numeric" min="0" max="255" placeholder="22"></div><div><label for="d-eatk">Enemy attack power</label><input id="d-eatk" type="number" inputmode="numeric" min="0" max="255" placeholder="28"></div><div><label for="d-def">Your defense power</label><input id="d-def" type="number" inputmode="numeric" min="0" max="255" placeholder="36"></div></div><p class="out" id="dmg-out" aria-live="polite">Fill in the four numbers. The example in the text uses 40 and 22</p></div>
+  <h2>One more, for map makers</h2>
+  <p>The maps are packed two ways. Maps with a number below 12 use four bits for each tile. Maps from 12 up use three bits. The dungeon tile set starts only at map 15, so the cellar of Tantegel and the two shrines, maps 12 to 14, are three-bit maps drawn with the town tiles.</p>
+  <h2>Sources</h2>
+  <p>The addresses refer to the code of Dragon Warrior (USA), first release. The memory locations agree with the public RAM map of the game's disassembly by nmikstas. The enemy numbers were read from the cartridge. <a href="/">Retro Companion</a> uses these same rules to show enemy stats and your damage range during a fight.</p>
+  <h2>More guides</h2>
+  <ul class="more">
+    <li><a href="/guides/dragon-warrior-walkthrough">Dragon Warrior walkthrough: the whole game in 32 steps</a></li>
+    <li><a href="/guides/dragon-warrior-hidden-items">Where the hidden items are in Dragon Warrior</a></li>
+    <li><a href="/guides/dragon-warrior-levels-spells">Dragon Warrior level chart: experience for all 30 levels and every spell</a></li>
+    <li><a href="/guides/dragon-warrior-shops-prices">Dragon Warrior shops: every price, town by town</a></li>
+    <li><a href="/guides/dragon-warrior-history">From Dragon Quest to Dragon Warrior: how the game reached America</a></li>
+  </ul>
+</main>
+<footer>
+  <p>Retro Companion has no connection to Square Enix or Nintendo. Game names belong to their owners.
+    This site does not distribute ROMs.</p>
+  <p><a href="/">Home</a> · <a href="/guides">Guides</a> · <a href="/support">Support</a> · <a href="/privacy">Privacy</a></p>
+</footer>
+<script type="application/json" id="rc-data">{"xp":[0,7,23,47,110,220,450,800,1300,2000,2900,4000,5500,7500,10000,13000,16000,19000,22000,26000,30000,34000,38000,42000,46000,50000,54000,58000,62000,65535],"spells":{"3":"HEAL","4":"HURT","7":"SLEEP","9":"RADIANT","10":"STOPSPELL","12":"OUTSIDE","13":"RETURN","15":"REPEL","17":"HEALMORE","19":"HURTMORE"},"cost":{"HEAL":4,"HURT":2,"SLEEP":2,"RADIANT":3,"STOPSPELL":2,"OUTSIDE":6,"RETURN":8,"REPEL":2,"HEALMORE":10,"HURTMORE":5},"token":[83,113],"home":[43,43]}</script>
+<script src="/guides.js" defer></script>
+<script src="/motion.js" defer></script>
+<script src="/hit.js" defer></script>
+</body>
+</html>

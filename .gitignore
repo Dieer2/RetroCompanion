@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+
+# kept out of the public repository: server operations, planning notes, brand originals
+CLAUDE.md
+deploy/
+docs/strategia.md
+docs/tamogatas.md
+assets/
