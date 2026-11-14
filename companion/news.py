@@ -7,6 +7,11 @@ something on the website.
 """
 
 NEWS = [
+    dict(date="2026-11-14", title="Version 0.7", items=[
+        "Ideas: suggest a feature and vote on the ideas of other players, in the program (Ideas, at the bottom "
+        "of the library) and on the website. The list shows what is planned, what is open for votes and what "
+        "is done. It needs a free account; one account has one vote on each idea",
+    ]),
     dict(date="2026-11-14", title="Version 0.6", items=[
         "The shop has more to spend points on: three more achievement chimes (Coin, Bells, Harp; each can be "
         "heard before buying), two more pop-up styles (a slim banner, and a card edged in the grade's colour) "

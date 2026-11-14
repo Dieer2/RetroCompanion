@@ -103,6 +103,14 @@ can show the game, your level and place and the step you are on (off by default)
 through the Discord program on the same computer and needs a Discord application ID, a
 public number entered in the settings until Retro Companion has its own.
 
+## Ideas
+
+"Ideas" at the bottom of the sidebar, and the Ideas page of the website, list the features
+players have asked for: planned, open for votes, done. Anyone with an account can suggest
+one and vote; one account has one vote on each idea. A new idea is read by the maintainer
+before everyone sees it. On the server: `python app.py idea` lists them,
+`idea <id> <status> [answer]` reviews one, `idea add <title> <text> [status]` adds one.
+
 ## Where things are stored
 
 `~/.retro_companion.json` holds settings, ROM locations, play time and progress.

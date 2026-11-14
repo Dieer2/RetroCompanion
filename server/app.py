@@ -63,9 +63,14 @@ TOKEN_DAYS = 180
 RESET_MINUTES = 30
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s.]{2,24}$")
 LIMITS = {"auth": (10, 600), "register": (5, 3600), "reset": (5, 3600), "sync": (120, 600), "read": (120, 60),
-          "hit": (60, 60), "admin": (20, 600)}
+          "hit": (60, 60), "admin": (20, 600), "idea": (5, 86400), "vote": (120, 600)}
 PAGES = {"/": "/", "/index.html": "/", "/support": "/support", "/support.html": "/support",
-         "/privacy": "/privacy", "/privacy.html": "/privacy"}
+         "/privacy": "/privacy", "/privacy.html": "/privacy", "/news": "/news", "/ideas": "/ideas"}
+# Ideas from players. A new one waits for the owner ("new": only its author and the admin see it);
+# "open" can be voted on, "planned" and "done" tell what became of it, "declined" hides it again.
+IDEA_STATES = ("new", "open", "planned", "done", "declined")
+IDEA_PUBLIC = ("planned", "open", "done")       # also the order they are listed in
+TEAM = "Retro Companion"                         # the name on ideas that have no player behind them
 GUIDE_RE = re.compile(r"^/guides(/[a-z0-9-]{1,80})?$")
 # the program is downloaded from its GitHub release page; this site hosts no executable
 DOWNLOAD = os.environ.get("RC_DOWNLOAD", "https://github.com/Dieer2/RetroCompanion/releases/latest")
@@ -111,6 +116,9 @@ class Service:
                 downloads INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS seen (day TEXT NOT NULL, hash TEXT NOT NULL, PRIMARY KEY (day, hash));
             CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS ideas (id INTEGER PRIMARY KEY, user INTEGER NOT NULL, title TEXT NOT NULL,
+                text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'new', created REAL NOT NULL, reply TEXT NOT NULL DEFAULT '');
+            CREATE TABLE IF NOT EXISTS votes (idea INTEGER NOT NULL, user INTEGER NOT NULL, PRIMARY KEY (idea, user));
         """)
         if "supporter" not in [r[1] for r in self.db.execute("PRAGMA table_info(users)")]:
             self.db.execute("ALTER TABLE users ADD COLUMN supporter TEXT NOT NULL DEFAULT ''")
@@ -304,8 +312,11 @@ class Service:
         if not hmac.compare_digest(pw_hash(password if isinstance(password, str) else "", row[1]), row[0]):
             raise Fail(401, "The password is wrong")
         with self.lock:
-            for table, col in (("tokens", "user"), ("resets", "user"), ("users", "id")):
+            for table, col in (("tokens", "user"), ("resets", "user"), ("votes", "user"), ("users", "id")):
                 self.db.execute("DELETE FROM %s WHERE %s = ?" % (table, col), (uid,))
+            # ideas nobody else has seen go with the account; the public ones stay, without the name
+            self.db.execute("DELETE FROM ideas WHERE user = ? AND status IN ('new', 'declined')", (uid,))
+            self.db.execute("UPDATE ideas SET user = -1 WHERE user = ?", (uid,))
             self.db.commit()
         return {"ok": True}
 
@@ -406,7 +417,101 @@ class Service:
                 self.db.execute("UPDATE daily SET downloads = downloads + 1 WHERE day = ?", (day,))
             self.db.commit()
 
-    def admin_stats(self, who, key):
+    # -- ideas: players suggest features and vote on them ---------------------------------
+    def _idea_rows(self, where, args, uid):
+        rows = self.rows(
+            "SELECT i.id, i.title, i.text, i.status, i.created, i.reply, i.user, COALESCE(u.name, ''), "
+            "(SELECT COUNT(*) FROM votes v WHERE v.idea = i.id), "
+            "(SELECT COUNT(*) FROM votes v WHERE v.idea = i.id AND v.user = ?) "
+            "FROM ideas i LEFT JOIN users u ON u.id = i.user WHERE " + where, (uid,) + tuple(args))
+        return [{"id": r[0], "title": r[1], "text": r[2], "status": r[3], "created": r[4], "reply": r[5],
+                 "mine": bool(uid) and r[6] == uid, "name": r[7] or (TEAM if r[6] == 0 else "A former player"),
+                 "votes": r[8], "voted": bool(r[9])} for r in rows]
+
+    def ideas(self, who, token):
+        """The public ideas, most wanted first; with a sign-in also the player's own waiting ones."""
+        self.limit("read", who)
+        uid = 0
+        if token:
+            try:
+                uid = self.auth(token)
+            except Fail:                        # an old sign-in must not hide the public list
+                uid = 0
+        out = self._idea_rows("i.status IN (%s) OR (i.user = ? AND ? != 0)" % ",".join("?" * len(IDEA_PUBLIC)),
+                              IDEA_PUBLIC + (uid, uid), uid)
+        order = {s: n for n, s in enumerate(IDEA_PUBLIC)}
+        out.sort(key=lambda i: (order.get(i["status"], 9), -i["votes"], i["created"]))
+        return {"ideas": out, "signed_in": bool(uid)}
+
+    @staticmethod
+    def _idea_text(title, text):
+        title = " ".join(title.split()) if isinstance(title, str) else ""
+        text = "\n".join(" ".join(ln.split()) for ln in text.splitlines()).strip() if isinstance(text, str) else ""
+        if not 6 <= len(title) <= 80:
+            raise Fail(400, "Give the idea a title of 6 to 80 characters")
+        if len(text) > 600:
+            raise Fail(400, "Keep the description under 600 characters")
+        return title, text
+
+    def idea_add(self, who, token, title, text):
+        uid = self.auth(token)
+        title, text = self._idea_text(title, text)
+        self.limit("idea", "u%d" % uid)
+        self.limit("idea", who)
+        with self.lock:
+            cur = self.db.execute("INSERT INTO ideas (user, title, text, status, created) VALUES (?, ?, ?, 'new', ?)",
+                                  (uid, title, text, time.time()))
+            self.db.execute("INSERT OR IGNORE INTO votes VALUES (?, ?)", (cur.lastrowid, uid))   # its author wants it
+            self.db.commit()
+        return {"ok": True, "id": cur.lastrowid}
+
+    def idea_vote(self, who, token, idea):
+        """One vote per account on an open idea; a second call takes it back."""
+        uid = self.auth(token)
+        self.limit("vote", who)
+        row = self.one("SELECT status FROM ideas WHERE id = ?", (idea if isinstance(idea, int) else -1,))
+        if not row or row[0] not in ("open", "planned"):
+            raise Fail(400, "That idea cannot be voted on")
+        with self.lock:
+            had = self.db.execute("DELETE FROM votes WHERE idea = ? AND user = ?", (idea, uid)).rowcount
+            if not had:
+                self.db.execute("INSERT INTO votes VALUES (?, ?)", (idea, uid))
+            self.db.commit()
+        return {"ok": True, "voted": not had,
+                "votes": self.one("SELECT COUNT(*) FROM votes WHERE idea = ?", (idea,))[0]}
+
+    def admin_ideas(self, who, key):
+        self._admin(who, key)
+        out = self._idea_rows("1 = 1", (), -1)
+        order = {s: n for n, s in enumerate(IDEA_STATES)}
+        out.sort(key=lambda i: (order.get(i["status"], 9), -i["votes"], i["created"]))
+        return {"ideas": out, "states": list(IDEA_STATES)}
+
+    def admin_idea(self, who, key, idea, status=None, reply=None, title=None, text=None):
+        """The owner's hand on the list: set a status and an answer, or add an idea of the team's own."""
+        self._admin(who, key)
+        return self.set_idea(idea, status, reply, title, text)
+
+    def set_idea(self, idea, status=None, reply=None, title=None, text=None):
+        if status is not None and status not in IDEA_STATES:
+            raise Fail(400, "status is one of: %s" % ", ".join(IDEA_STATES))
+        reply = None if reply is None else str(reply).strip()[:600]
+        with self.lock:
+            if idea is None:
+                title, text = self._idea_text(title, text)
+                idea = self.db.execute("INSERT INTO ideas (user, title, text, status, created, reply) VALUES (0, ?, ?, ?, ?, ?)",
+                                       (title, text, status or "open", time.time(), reply or "")).lastrowid
+            else:
+                if not self.db.execute("SELECT 1 FROM ideas WHERE id = ?", (idea,)).fetchone():
+                    raise Fail(404, "No such idea")
+                if status is not None:
+                    self.db.execute("UPDATE ideas SET status = ? WHERE id = ?", (status, idea))
+                if reply is not None:
+                    self.db.execute("UPDATE ideas SET reply = ? WHERE id = ?", (reply, idea))
+            self.db.commit()
+        return {"ok": True, "id": idea}
+
+    def _admin(self, who, key):
         self.limit("admin", who)
         salt, _, want = os.environ.get("RC_ADMIN", "").partition(":")
         try:
@@ -415,6 +520,9 @@ class Service:
             ok = False
         if not ok:
             raise Fail(401, "Wrong password" if want else "The admin password is not set on the server")
+
+    def admin_stats(self, who, key):
+        self._admin(who, key)
         now = time.time()
         days = [time.strftime("%Y-%m-%d", time.gmtime(now - 86400 * i)) for i in range(30)]
         since = days[-1]
@@ -435,6 +543,7 @@ class Service:
                          "on_board": self.one("SELECT COUNT(*) FROM users WHERE points > 0")[0],
                          "supporters": self.one("SELECT COUNT(*) FROM users WHERE supporter != ''")[0],
                          "new_30d": self.one("SELECT COUNT(*) FROM users WHERE created >= ?", (now - 30 * 86400,))[0]},
+            "ideas_waiting": self.one("SELECT COUNT(*) FROM ideas WHERE status = 'new'")[0],
             "version": VERSION,
         }
 
@@ -517,6 +626,10 @@ def make_handler(svc):
                 return self.run(lambda: svc.supporters(self.who()))
             if path == "/api/admin/stats":
                 return self.run(lambda: svc.admin_stats(self.who(), self.token()))
+            if path == "/api/ideas":
+                return self.run(lambda: svc.ideas(self.who(), self.token()))
+            if path == "/api/admin/ideas":
+                return self.run(lambda: svc.admin_ideas(self.who(), self.token()))
             if path == "/api/download":
                 try:
                     svc.download(self.who(), self.headers.get("User-Agent", ""))
@@ -543,6 +656,10 @@ def make_handler(svc):
                 "/api/reset/request": lambda d: svc.reset_request(who, d.get("email")),
                 "/api/reset/confirm": lambda d: svc.reset_confirm(who, d.get("email"), d.get("code"), d.get("password")),
                 "/api/account/delete": lambda d: svc.delete_account(who, tok, d.get("password")),
+                "/api/ideas": lambda d: svc.idea_add(who, tok, d.get("title"), d.get("text")),
+                "/api/ideas/vote": lambda d: svc.idea_vote(who, tok, d.get("id")),
+                "/api/admin/idea": lambda d: svc.admin_idea(who, tok, d.get("id"), d.get("status"), d.get("reply"),
+                                                            d.get("title"), d.get("text")),
             }
             try:
                 n = int(self.headers.get("Content-Length") or 0)
@@ -584,9 +701,31 @@ def supporter_command(args):
         print("%-8s %s (%s)" % (tier, email, name))
 
 
+def idea_command(args):
+    """app.py idea                              list every idea
+       app.py idea add <title> <text> [status]   an idea of the team's own (status: open unless given)
+       app.py idea <id> <status> [answer]        review one: new, open, planned, done, declined"""
+    with open(os.environ.get("RC_CATALOGUE", os.path.join(HERE, "catalogue.json")), encoding="utf-8") as fh:
+        svc = Service(os.environ.get("RC_DB", os.path.join(HERE, "retrocompanion.db")), json.load(fh))
+    try:
+        if args[:1] == ["add"] and len(args) in (3, 4):
+            print("added as idea %d" % svc.set_idea(None, args[3] if len(args) == 4 else "open", None, args[1], args[2])["id"])
+        elif len(args) in (2, 3) and args[0].isdigit():
+            svc.set_idea(int(args[0]), args[1], args[2] if len(args) == 3 else None)
+            print("idea %s is now: %s" % (args[0], args[1]))
+        elif args:
+            sys.exit(idea_command.__doc__)
+    except Fail as f:
+        sys.exit(f.message)
+    for i in svc._idea_rows("1 = 1 ORDER BY i.id", (), -1):
+        print("%3d  %-8s %2d votes  %s  (%s)" % (i["id"], i["status"], i["votes"], i["title"], i["name"]))
+
+
 def main():
     if sys.argv[1:2] == ["supporter"]:
         return supporter_command(sys.argv[2:])
+    if sys.argv[1:2] == ["idea"]:
+        return idea_command(sys.argv[2:])
     key = os.environ.get("RESEND_API_KEY", "").strip()
     mail = resend_mailer(key, os.environ.get("RC_MAIL_FROM", "Retro Companion <noreply@localhost>")) if key else None
     httpd, _ = build(os.environ.get("RC_DB", os.path.join(HERE, "retrocompanion.db")),

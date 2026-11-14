@@ -53,6 +53,13 @@
     </section>
 
     <section>
+      <h2>Ideas</h2>
+      <p class="sub" id="ideas-note">A new idea shows for everyone once its status is open.</p>
+      <table class="idea-admin"><thead><tr><th>Idea</th><th class="num">Votes</th><th>Status</th><th>Answer</th></tr></thead>
+        <tbody id="idea-rows"></tbody></table>
+    </section>
+
+    <section>
       <h2>Day by day</h2>
       <p class="sub">Days are counted in UTC. A visitor counts once a day, a download once per visitor a day.</p>
       <table class="compact"><thead><tr><th>Day</th><th class="num">Visitors</th><th class="num">Views</th><th class="num">Downloads</th><th class="bar-col"></th></tr></thead>
@@ -109,10 +116,32 @@
     $("gate").hidden = true; $("board").hidden = false; $("out").hidden = false;
   }
 
+  function ideas(pw) {
+    fetch("/api/admin/ideas", { headers: { Authorization: "Bearer " + pw }, cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.ideas) return;
+      var save = function (body) {
+        return fetch("/api/admin/idea", { method: "POST", headers: { Authorization: "Bearer " + pw, "Content-Type": "application/json" },
+          body: JSON.stringify(body) }).then(function (r) { return r.json(); }).then(function (a) {
+          $("ideas-note").textContent = a.error || "Saved at " + new Date().toLocaleTimeString() + "."; });
+      };
+      fill("idea-rows", d.ideas.length ? d.ideas.map(function (i) {
+        var what = el("td"), sel = el("select"), st = el("td"), ans = el("td"), inp = el("input");
+        what.appendChild(el("div", i.title));
+        what.appendChild(el("div", (i.text ? i.text + " · " : "") + i.name + " · " + new Date(i.created * 1000).toLocaleDateString("en-GB"), "meta"));
+        d.states.forEach(function (s) { var o = el("option", s); o.value = s; o.selected = s === i.status; sel.appendChild(o); });
+        sel.addEventListener("change", function () { save({ id: i.id, status: sel.value }); });
+        inp.value = i.reply; inp.maxLength = 600;
+        inp.addEventListener("change", function () { save({ id: i.id, reply: inp.value }); });
+        st.appendChild(sel); ans.appendChild(inp);
+        return row([what, num(i.votes), st, ans]);
+      }) : [row([el("td", "No ideas yet")])]);
+    }).catch(function () {});
+  }
+
   function load(pw, quiet) {
     return fetch("/api/admin/stats", { headers: { Authorization: "Bearer " + pw }, cache: "no-store" }).then(function (r) {
       return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "The server answered with an error"); return d; });
-    }).then(function (d) { sessionStorage.setItem(KEY, pw); show(d); }).catch(function (e) {
+    }).then(function (d) { sessionStorage.setItem(KEY, pw); show(d); ideas(pw); }).catch(function (e) {
       sessionStorage.removeItem(KEY);
       $("board").hidden = true; $("gate").hidden = false; $("out").hidden = true;
       if (!quiet) $("gate-note").textContent = e.message;

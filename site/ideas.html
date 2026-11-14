@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ideas · Retro Companion</title>
+<meta name="description" content="Suggest a feature for Retro Companion and vote on the ideas of other players. The most wanted ones are built first.">
+<link rel="canonical" href="https://retro.dieergames.hu/ideas">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Retro Companion">
+<meta property="og:title" content="Ideas · Retro Companion">
+<meta property="og:description" content="Suggest a feature for Retro Companion and vote on the ideas of other players. The most wanted ones are built first.">
+<meta property="og:url" content="https://retro.dieergames.hu/ideas">
+<meta property="og:image" content="https://retro.dieergames.hu/img/share.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="bar">
+  <a class="mark" href="/"><img src="/img/dieergames.png" width="203" height="22" alt="DieerGames"></a>
+  <nav><a href="/#features">Features</a><a href="/guides">Guides</a><a href="/#leaderboard">Leaderboard</a><a href="/ideas">Ideas</a><a href="/support">Support</a><a href="/privacy">Privacy</a></nav>
+</header>
+<main class="doc article">
+  <h1>Ideas</h1>
+  <p class="lead">Tell me what Retro Companion should do next, and vote for the ideas of others. The most wanted
+    ones are built first.</p>
+  <p class="status"><span id="who"></span>
+    <button type="button" class="linkish" id="sign-in">Sign in</button>
+    <button type="button" class="linkish" id="sign-out" hidden>Sign out</button></p>
+
+  <form id="gate" class="gate" hidden>
+    <h2 id="gate-title">Sign in</h2>
+    <p class="sub">The same account as in the program. One account has one vote on each idea.</p>
+    <div id="name-row" hidden><label for="name">Player name</label><input id="name" type="text" autocomplete="nickname" maxlength="24"></div>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="email" required>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required minlength="8">
+    <div class="gate-row"><button class="btn" type="submit" id="gate-go">Sign in</button>
+      <button type="button" class="linkish" id="mode">Create an account</button></div>
+    <p class="status" id="gate-note" role="status"></p>
+  </form>
+
+  <div id="ideas" aria-live="polite"><p class="status">Loading the list</p></div>
+
+  <form id="send" class="gate send">
+    <h2>Suggest a feature</h2>
+    <p class="sub">One idea at a time. I read each one before it shows up for everyone.</p>
+    <label for="title">Title</label>
+    <input id="title" type="text" required minlength="6" maxlength="80">
+    <label for="text">What should it do, and why would it help?</label>
+    <textarea id="text" rows="4" maxlength="600"></textarea>
+    <button class="btn" type="submit">Send the idea</button>
+    <p class="status" id="send-note" role="status"></p>
+  </form>
+</main>
+<footer>
+  <p>Retro Companion has no connection to Square Enix or Nintendo. Game names belong to their owners.
+    This site does not distribute ROMs.</p>
+  <p><a href="/">Home</a> · <a href="/guides">Guides</a> · <a href="/news">What's new</a> · <a href="/ideas">Ideas</a> · <a href="/support">Support</a> · <a href="/privacy">Privacy</a></p>
+</footer>
+<script src="/ideas.js" defer></script>
+<script src="/motion.js" defer></script>
+<script src="/hit.js" defer></script>
+</body>
+</html>

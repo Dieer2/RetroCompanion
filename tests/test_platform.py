@@ -239,6 +239,41 @@ r = c.getresponse(); r.read(); assert r.status == 302 and r.getheader("Location"
 c.request("GET", "/api/admin/stats", headers={"Authorization": "Bearer admin-test-pass"}); r = c.getresponse()
 assert r.status == 200 and json.loads(r.read())["total"]["downloads"] == 2; c.close()
 del os.environ["RC_ADMIN"]
+# ideas: a new one waits for the owner, then everyone sees it; one vote per account, taken back by a second call
+anon = Account({})
+assert anon.call("GET", "/api/ideas") == {"ideas": [], "signed_in": False}
+assert fails(lambda: anon.call("POST", "/api/ideas", {"title": "A second game", "text": "x"}), 401)
+assert fails(lambda: pc3.call("POST", "/api/ideas", {"title": "short", "text": ""}), 400)
+i1 = pc3.call("POST", "/api/ideas", {"title": "  A second   game ", "text": "Final Fantasy\n  would be  nice"})["id"]
+mine = pc3.call("GET", "/api/ideas")
+assert mine["signed_in"] and [(i["title"], i["text"], i["status"], i["votes"], i["voted"], i["mine"], i["name"]) for i in mine["ideas"]] == [
+    ("A second game", "Final Fantasy\nwould be nice", "new", 1, True, True, "Bob")]
+assert anon.call("GET", "/api/ideas")["ideas"] == [] and pc1.call("GET", "/api/ideas")["ideas"] == []      # not public yet
+assert fails(lambda: pc1.call("POST", "/api/ideas/vote", {"id": i1}), 400)                                  # nor votable
+os.environ["RC_ADMIN"] = "00" * 16 + ":" + _h.scrypt(b"admin-test-pass", salt=bytes(16), n=2 ** 14, r=8, p=1, dklen=32).hex()
+try:
+    svc.admin_idea("9.9.9.9", "wrong", i1, "open"); raise SystemExit("an idea was changed with a wrong password")
+except SRV.Fail as f:
+    assert f.status == 401
+assert svc.admin_ideas("9.9.9.9", "admin-test-pass")["ideas"][0]["status"] == "new"
+svc.admin_idea("9.9.9.9", "admin-test-pass", i1, "open", "Good one")
+i2 = svc.admin_idea("9.9.9.9", "admin-test-pass", None, "planned", None, "Rarity of achievements", "How many players have each one")["id"]
+i3 = pc1.call("POST", "/api/ideas", {"title": "Something rude", "text": ""})["id"]
+svc.admin_idea("9.9.9.9", "admin-test-pass", i3, "declined")
+assert pc1.call("POST", "/api/ideas/vote", {"id": i1}) == {"ok": True, "voted": True, "votes": 2}
+assert pc1.call("POST", "/api/ideas/vote", {"id": i2})["votes"] == 1 and fails(lambda: anon.call("POST", "/api/ideas/vote", {"id": i1}), 401)
+assert fails(lambda: pc1.call("POST", "/api/ideas/vote", {"id": 999}), 400) and fails(lambda: pc1.call("POST", "/api/ideas/vote", {"id": "1"}), 400)
+pub = anon.call("GET", "/api/ideas")["ideas"]
+assert [(i["title"], i["status"], i["votes"], i["name"], i["reply"], i["voted"]) for i in pub] == [
+    ("Rarity of achievements", "planned", 1, "Retro Companion", "", False), ("A second game", "open", 2, "Bob", "Good one", False)]
+assert "example.com" not in json.dumps(pub)
+assert [i["title"] for i in pc1.call("GET", "/api/ideas")["ideas"]] == ["Rarity of achievements", "A second game", "Something rude"]
+assert pc1.call("POST", "/api/ideas/vote", {"id": i1}) == {"ok": True, "voted": False, "votes": 1}
+c = _hc.HTTPConnection("127.0.0.1", httpd.server_address[1])
+c.request("POST", "/api/admin/idea", json.dumps({"id": i2, "status": "done"}), {"Authorization": "Bearer admin-test-pass", "Content-Type": "application/json"})
+r = c.getresponse(); assert r.status == 200 and json.loads(r.read())["ok"]; c.close()
+assert svc.admin_stats("9.9.9.9", "admin-test-pass")["ideas_waiting"] == 0
+del os.environ["RC_ADMIN"]
 # password reset by mailed code, then the old token and the old password are dead
 pc1.call("POST", "/api/reset/request", {"email": "ann@example.com"}); pc1.call("POST", "/api/reset/request", {"email": "nobody@example.com"})
 assert len(mails) == 1 and mails[0][0] == "ann@example.com"
@@ -250,6 +285,8 @@ assert fails(lambda: pc2.call("POST", "/api/sync", {"state": {}}), 401) and fail
 assert fails(lambda: pc3.call("POST", "/api/account/delete", {"password": "wrong-pass"}), 401)
 pc3.call("POST", "/api/account/delete", {"password": "test-pass-2"})
 assert pc3.call("GET", "/api/leaderboard")["total"] == 1 and fails(lambda: pc3.call("POST", "/api/sync", {"state": {}}), 401)
+left = anon.call("GET", "/api/ideas")["ideas"]            # Bob is gone: his public idea stays without his name, his vote goes
+assert [(i["title"], i["name"], i["votes"]) for i in left] == [("A second game", "A former player", 0), ("Rarity of achievements", "Retro Companion", 1)]
 row = svc.db.execute("SELECT pw, state FROM users").fetchone(); assert b"test-pass" not in row[0] and "test-pass" not in row[1]
 httpd.shutdown(); del os.environ["RC_SERVER"]; print("account server OK")
 # a beaten enemy: the HP byte wraps below zero and must read as 0, never as a full bar; the log lines

@@ -28,7 +28,7 @@ MONTHS = ("January February March April May June July August September October N
 ORDER = ["dragon-warrior-walkthrough", "dragon-warrior-hidden-items", "dragon-warrior-levels-spells",
          "dragon-warrior-shops-prices", "dragon-warrior-game-code-facts", "dragon-warrior-history"]
 NAV = ('<a href="/#features">Features</a><a href="/guides">Guides</a><a href="/#leaderboard">Leaderboard</a>'
-       '<a href="/support">Support</a><a href="/privacy">Privacy</a>')
+       '<a href="/ideas">Ideas</a><a href="/support">Support</a><a href="/privacy">Privacy</a>')
 COST = dict(zip(DW.SPELL_ORDER, [4, 2, 2, 3, 2, 6, 8, 2, 10, 5]))
 TOWNS = ["Brecconary", "Garinham", "Kol", "Rimuldar", "Cantlin"]
 # places on the 120 x 120 overworld: name, x, y, kind ("town", "cave", "hidden")
@@ -73,7 +73,7 @@ PAGE = """<!doctype html>
 <footer>
   <p>Retro Companion has no connection to Square Enix or Nintendo. Game names belong to their owners.
     This site does not distribute ROMs.</p>
-  <p><a href="/">Home</a> · <a href="/guides">Guides</a> · <a href="/news">What's new</a> · <a href="/support">Support</a> · <a href="/privacy">Privacy</a></p>
+  <p><a href="/">Home</a> · <a href="/guides">Guides</a> · <a href="/news">What's new</a> · <a href="/ideas">Ideas</a> · <a href="/support">Support</a> · <a href="/privacy">Privacy</a></p>
 </footer>{scripts}
 <script src="/motion.js" defer></script>
 <script src="/hit.js" defer></script>
@@ -248,6 +248,41 @@ def load(path):
     return {k.strip(): v.strip() for k, v in meta.items()}, body
 
 
+# the ideas page: the list is filled in by site/ideas.js from /api/ideas
+IDEAS_BODY = """  <h1>Ideas</h1>
+  <p class="lead">Tell me what Retro Companion should do next, and vote for the ideas of others. The most wanted
+    ones are built first.</p>
+  <p class="status"><span id="who"></span>
+    <button type="button" class="linkish" id="sign-in">Sign in</button>
+    <button type="button" class="linkish" id="sign-out" hidden>Sign out</button></p>
+
+  <form id="gate" class="gate" hidden>
+    <h2 id="gate-title">Sign in</h2>
+    <p class="sub">The same account as in the program. One account has one vote on each idea.</p>
+    <div id="name-row" hidden><label for="name">Player name</label><input id="name" type="text" autocomplete="nickname" maxlength="24"></div>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="email" required>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required minlength="8">
+    <div class="gate-row"><button class="btn" type="submit" id="gate-go">Sign in</button>
+      <button type="button" class="linkish" id="mode">Create an account</button></div>
+    <p class="status" id="gate-note" role="status"></p>
+  </form>
+
+  <div id="ideas" aria-live="polite"><p class="status">Loading the list</p></div>
+
+  <form id="send" class="gate send">
+    <h2>Suggest a feature</h2>
+    <p class="sub">One idea at a time. I read each one before it shows up for everyone.</p>
+    <label for="title">Title</label>
+    <input id="title" type="text" required minlength="6" maxlength="80">
+    <label for="text">What should it do, and why would it help?</label>
+    <textarea id="text" rows="4" maxlength="600"></textarea>
+    <button class="btn" type="submit">Send the idea</button>
+    <p class="status" id="send-note" role="status"></p>
+  </form>"""
+
+
 def main():
     arts = []
     for path in glob.glob(os.path.join(ROOT, "docs", "guides", "*.md")):
@@ -297,7 +332,12 @@ def main():
                             'The program shows the same list in its library window.</p>\n' + "\n".join(parts))
     with open(os.path.join(ROOT, "site", "news.html"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write(page)
-    urls = ["/", "/guides"] + ["/guides/" + s for s, _, _ in arts] + ["/news", "/support", "/privacy"]
+    desc = "Suggest a feature for Retro Companion and vote on the ideas of other players. The most wanted ones are built first."
+    page = PAGE.format(title="Ideas · Retro Companion", desc=esc(desc), url=BASE + "/ideas", base=BASE,
+                       ogtype="website", nav=NAV, scripts='\n<script src="/ideas.js" defer></script>', body=IDEAS_BODY)
+    with open(os.path.join(ROOT, "site", "ideas.html"), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(page)
+    urls = ["/", "/guides"] + ["/guides/" + s for s, _, _ in arts] + ["/news", "/ideas", "/support", "/privacy"]
     with open(os.path.join(ROOT, "site", "sitemap.xml"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
                  + "".join("  <url><loc>%s%s</loc></url>\n" % (BASE, u) for u in urls) + "</urlset>\n")

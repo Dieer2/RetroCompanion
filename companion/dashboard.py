@@ -151,6 +151,7 @@ class App:
         self._moby_busy = False
         self._moby_err = ""
         self._profile_win = None
+        self._ideas = None          # the open ideas window, if any
         self._shop_y = 0.0          # where the shop list was scrolled to
         self._cmd = None            # a RetroArch connection of the main thread, for commands without a reply
         self.presence = discord.Presence(self.store.settings.get("discord_app") or discord.APP_ID)
@@ -230,6 +231,7 @@ class App:
         ver.pack(fill="x", pady=(S2, 0))
         tk.Label(ver, text="v" + VERSION, bg=T.DEEP, fg=T.MUTED, font=(T.MONO, 8), anchor="w").pack(side="left")
         T.button(tk, ver, "What's new", self.open_news, kind="quiet", size=9).pack(side="right")
+        T.button(tk, ver, "Ideas", self.open_ideas, kind="quiet", size=9).pack(side="right", padx=(0, S3))
         # the player's profile: level, points, trophies. Click opens the profile and shop window
         prof = tk.Frame(side, bg=T.DEEP, cursor="hand2")
         prof.pack(side="bottom", fill="x", padx=S4, pady=(0, S4))
@@ -693,6 +695,130 @@ class App:
         T.button(tk, row, "Choose a picture file", own).pack(side="right", anchor="n")
         note.pack(side="left", fill="x", expand=True, padx=(0, T.S3))
 
+    # -- ideas: suggest a feature, vote on the others ---------------------------------
+    def open_ideas(self):
+        tk = self.tk
+        if self._ideas is not None and self._ideas["win"].winfo_exists():
+            self._ideas["win"].destroy()
+        win = tk.Toplevel(self.root)
+        win.title("Ideas")
+        win.configure(bg=T.PAGE)
+        win.transient(self.root)
+        h = min(760, self.root.winfo_screenheight() - 140)
+        win.geometry("600x%d+%d+%d" % (h, self.root.winfo_rootx() + 300,
+                                       max(0, min(self.root.winfo_rooty() + 20, self.root.winfo_screenheight() - h - 100))))
+        lab = lambda text, fg=T.MUTED, font=None, **kw: tk.Label(win, text=text, bg=T.PAGE, fg=fg, font=font or (T.FONT, 9),
+                                                                 anchor="w", justify="left", **kw)
+        lab("Ideas", T.TEXT, (T.FONT, 14)).pack(fill="x", padx=T.S6, pady=(T.S6, 0))
+        lab("Tell me what Retro Companion should do next, and vote for the ideas of others. The most wanted ones "
+            "are built first. The website shows the same list", wraplength=552).pack(fill="x", padx=T.S6, pady=(2, T.S2))
+        # the form sits at the bottom; the list takes the room that is left
+        form = tk.Frame(win, bg=T.PAGE)
+        form.pack(side="bottom", fill="x", padx=T.S6, pady=(0, T.S6))
+        tk.Frame(form, bg=T.hair(T.PAGE), height=1).pack(fill="x", pady=(0, T.S3))
+        tk.Label(form, text="Suggest a feature", bg=T.PAGE, fg=T.TEXT, font=(T.FONT, 11), anchor="w").pack(fill="x")
+        title = tk.StringVar()
+        ent = dict(bg=T.RAISED, fg=T.TEXT, insertbackground=T.TEXT, relief="flat", font=(T.FONT, 10),
+                   highlightthickness=1, highlightbackground=T.hair(T.RAISED), highlightcolor=T.MUTED)
+        tk.Label(form, text="Title", bg=T.PAGE, fg=T.MUTED, font=(T.FONT, 9), anchor="w").pack(fill="x", pady=(T.S2, 2))
+        tk.Entry(form, textvariable=title, **ent).pack(fill="x", ipady=5)
+        tk.Label(form, text="What should it do, and why would it help?", bg=T.PAGE, fg=T.MUTED, font=(T.FONT, 9),
+                 anchor="w").pack(fill="x", pady=(T.S2, 2))
+        body = tk.Text(form, height=3, wrap="word", padx=6, pady=4, **ent)
+        body.pack(fill="x")
+        row = tk.Frame(form, bg=T.PAGE)
+        row.pack(fill="x", pady=(T.S3, 0))
+        T.button(tk, row, "Send the idea", self.send_idea, kind="primary", accent=self.sel.accent).pack(side="right")
+        msg = tk.Label(row, text="", bg=T.PAGE, fg=T.MUTED, font=(T.FONT, 9), anchor="w", justify="left", wraplength=400)
+        msg.pack(side="left", fill="x", expand=True)
+        box = tk.Frame(win, bg=T.PAGE)
+        box.pack(fill="both", expand=True, padx=(T.S6, T.S2), pady=(0, T.S3))
+        t = tk.Text(box, bg=T.PAGE, fg=T.TEXT2, bd=0, highlightthickness=0, wrap="word", font=(T.FONT, 10),
+                    cursor="arrow", padx=0, pady=0, spacing1=1, spacing3=2)
+        sb = T.Scroll(tk, box, t)
+        t.configure(yscrollcommand=sb.set)
+        sb.c.pack(side="right", fill="y")
+        t.pack(side="left", fill="both", expand=True)
+        t.tag_configure("group", foreground=T.TEXT, font=(T.FONT, 11), spacing1=T.S4)
+        t.tag_configure("note", foreground=T.MUTED, font=(T.FONT, 9))
+        t.tag_configure("votes", foreground=T.TEXT, font=(T.MONO, 10), spacing1=T.S3)
+        t.tag_configure("mine", foreground=T.accent_text(self.sel.accent))
+        t.tag_configure("head", foreground=T.TEXT, font=(T.FONT, 11))
+        t.tag_configure("item", lmargin1=52, lmargin2=52)
+        t.tag_configure("link", foreground=T.MUTED, font=(T.FONT, 9, "underline"))
+        t.insert("end", "Loading the list", "note")
+        t.configure(state="disabled")
+        self._ideas = {"win": win, "text": t, "msg": msg, "title": title, "body": body}
+        if not self.account.signed_in:
+            msg.configure(text="Voting and suggesting need a free account: open your profile and sign in")
+        self.net("ideas", "GET", "/api/ideas")
+
+    def fill_ideas(self, res, err):
+        w = self._ideas
+        if w is None or not w["win"].winfo_exists():
+            return
+        t = w["text"]
+        top = t.yview()[0]
+        t.configure(state="normal")
+        t.delete("1.0", "end")
+        if err is not None:
+            t.insert("end", "The list could not be loaded: %s" % err, "note")
+            t.configure(state="disabled")
+            return
+        ideas = res.get("ideas", [])
+        groups = [("Your ideas", "Each new idea is read before it shows up for everyone",
+                   [i for i in ideas if i["status"] in ("new", "declined")]),
+                  ("Planned", "Decided: these get built", [i for i in ideas if i["status"] == "planned"]),
+                  ("Open for votes", "The most wanted ones are built first", [i for i in ideas if i["status"] == "open"]),
+                  ("Done", "Suggested here and now in the program", [i for i in ideas if i["status"] == "done"])]
+        if not ideas:
+            t.insert("end", "No ideas yet. Send the first one", "note")
+        for name, note, items in groups:
+            if not items:
+                continue
+            t.insert("end", name + "\n", "group")
+            t.insert("end", note + "\n", "note")
+            for i in items:
+                t.insert("end", "%3d   " % i["votes"], ("votes", "mine") if i["voted"] else "votes")
+                t.insert("end", i["title"], "head")
+                if i["status"] in ("open", "planned"):
+                    tag = "v%d" % i["id"]
+                    t.tag_configure(tag)
+                    t.tag_bind(tag, "<Button-1>", lambda e, n=i["id"]: self.vote_idea(n))
+                    t.tag_bind(tag, "<Enter>", lambda e: t.configure(cursor="hand2"))
+                    t.tag_bind(tag, "<Leave>", lambda e: t.configure(cursor="arrow"))
+                    t.insert("end", "   ")
+                    t.insert("end", "Take back my vote" if i["voted"] else "Vote", ("link", tag))
+                t.insert("end", "\n")
+                if i.get("text"):
+                    t.insert("end", i["text"] + "\n", "item")
+                if i.get("reply"):
+                    t.insert("end", "Answer: %s\n" % i["reply"], ("item", "head"))
+                state = {"new": " · waiting for review, only you see it", "declined": " · not taken up"}.get(i["status"], "")
+                t.insert("end", "Suggested by %s · %s%s\n" % (i["name"], time.strftime("%d %b %Y", time.localtime(i["created"])),
+                                                              state), ("item", "note"))
+        t.configure(state="disabled")
+        t.yview_moveto(top)
+
+    def vote_idea(self, idea):
+        if not self.account.signed_in:
+            self._ideas["msg"].configure(text="Voting needs a free account: open your profile and sign in", fg=T.NEG)
+            return
+        self._ideas["msg"].configure(text="", fg=T.MUTED)
+        self.net("idea_vote", "POST", "/api/ideas/vote", {"id": idea})
+
+    def send_idea(self):
+        w = self._ideas
+        if not self.account.signed_in:
+            w["msg"].configure(text="Suggesting needs a free account: open your profile and sign in", fg=T.NEG)
+            return
+        title = w["title"].get().strip()
+        if len(title) < 6:
+            w["msg"].configure(text="Give the idea a title of at least 6 characters", fg=T.NEG)
+            return
+        w["msg"].configure(text="Sending", fg=T.MUTED)
+        self.net("idea_send", "POST", "/api/ideas", {"title": title, "text": w["body"].get("1.0", "end").strip()})
+
     # -- what is new ---------------------------------------------------------------
     def open_news(self):
         tk = self.tk
@@ -800,6 +926,23 @@ class App:
                 self.open_profile()
         elif tag == "board":
             self.fill_leaderboard(res, err)
+        elif tag == "ideas":
+            self.fill_ideas(res, err)
+        elif tag in ("idea_vote", "idea_send"):
+            w = self._ideas
+            if w is None or not w["win"].winfo_exists():
+                return
+            if err is not None:
+                if err.status == 401:
+                    self.account.forget()
+                    self.store.save()
+                w["msg"].configure(text=str(err), fg=T.NEG)
+                return
+            if tag == "idea_send":
+                w["title"].set("")
+                w["body"].delete("1.0", "end")
+                w["msg"].configure(text="Thank you. Your idea shows up for everyone once it has been read", fg=T.TEXT2)
+            self.net("ideas", "GET", "/api/ideas")
         elif tag in ("auth", "code", "delete"):
             f = self._form
             if f is None or not f["win"].winfo_exists():
