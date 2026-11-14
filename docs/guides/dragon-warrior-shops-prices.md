@@ -8,49 +8,55 @@ Gold is the slow part of Dragon Warrior. The best sword and shield together cost
 
 ## Weapons
 
-| Weapon | Price | Sold in |
-| --- | --- | --- |
-| Bamboo Pole | 10 | Brecconary |
-| Club | 60 | Brecconary, Garinham |
-| Copper Sword | 180 | Brecconary, Garinham, Kol, Rimuldar |
-| Hand Axe | 560 | Garinham, Kol, Rimuldar, Cantlin |
-| Broad Sword | 1,500 | Rimuldar, Cantlin |
-| Flame Sword | 9,800 | Cantlin, the locked shop |
+| Weapon | Attack | Price | Sold in |
+| --- | --- | --- | --- |
+| Bamboo Pole | +2 | 10 | Brecconary |
+| Club | +4 | 60 | Brecconary, Garinham |
+| Copper Sword | +10 | 180 | Brecconary, Garinham, Kol, Rimuldar |
+| Hand Axe | +15 | 560 | Garinham, Kol, Rimuldar, Cantlin |
+| Broad Sword | +20 | 1,500 | Rimuldar, Cantlin |
+| Flame Sword | +28 | 9,800 | Cantlin, the locked shop |
 
-Erdrick's Sword is not sold. It is in a chest in Charlock Castle.
+Erdrick's Sword is not sold. It is in a chest in Charlock Castle and adds 40 to your attack.
+
+The attack and defense numbers on this page are the game's own tables. A weapon adds its number to your attack power; armor and shield add theirs to your defense.
 
 ## Armor
 
-| Armor | Price | Sold in |
-| --- | --- | --- |
-| Clothes | 20 | Brecconary |
-| Leather Armor | 70 | Brecconary, Garinham |
-| Chain Mail | 300 | Garinham, Cantlin |
-| Half Plate | 1,000 | Garinham, Kol, Rimuldar |
-| Full Plate | 3,000 | Kol, Rimuldar, Cantlin |
-| Magic Armor | 7,700 | Rimuldar, Cantlin |
+| Armor | Defense | Price | Sold in |
+| --- | --- | --- | --- |
+| Clothes | +2 | 20 | Brecconary |
+| Leather Armor | +4 | 70 | Brecconary, Garinham |
+| Chain Mail | +10 | 300 | Garinham, Cantlin |
+| Half Plate | +16 | 1,000 | Garinham, Kol, Rimuldar |
+| Full Plate | +24 | 3,000 | Kol, Rimuldar, Cantlin |
+| Magic Armor | +24 | 7,700 | Rimuldar, Cantlin |
 
-Erdrick's Armor is not sold either. It is buried in Hauksness.
+Erdrick's Armor is not sold either. It is buried in Hauksness and adds 28 to your defense.
+
+Magic Armor protects no better than Full Plate. What the extra 4,700 gold buys is this: it gives back one hit point on every fourth step, and an enemy's HURT and HURTMORE do two thirds of their damage. Fire breath is not weakened by it.
 
 ## Shields
 
-| Shield | Price | Sold in |
-| --- | --- | --- |
-| Small Shield | 90 | Brecconary, Kol |
-| Large Shield | 800 | Garinham, Cantlin |
-| Silver Shield | 14,800 | Cantlin, the locked shop |
+| Shield | Defense | Price | Sold in |
+| --- | --- | --- | --- |
+| Small Shield | +4 | 90 | Brecconary, Kol |
+| Large Shield | +10 | 800 | Garinham, Cantlin |
+| Silver Shield | +20 | 14,800 | Cantlin, the locked shop |
 
 ## Items
 
-| Item | Price | Sold in |
-| --- | --- | --- |
-| Torch | 8 | Brecconary, Garinham, Kol, Cantlin |
-| Dragon's Scale | 20 | Brecconary, Garinham, Kol, Cantlin |
-| Herb | 24 | Brecconary, Garinham, Kol, Cantlin |
-| Fairy Water | 38 | Brecconary (needs a key), Cantlin |
-| Wings | 70 | Kol, Cantlin |
+| Item | What it does | Price | Sold in |
+| --- | --- | --- | --- |
+| Torch | Lights 3 by 3 tiles in a cave | 8 | Brecconary, Garinham, Kol, Cantlin |
+| Dragon's Scale | Defense +2 once you use it | 20 | Brecconary, Garinham, Kol, Cantlin |
+| Herb | Restores 23 to 30 hit points | 24 | Brecconary, Garinham, Kol, Cantlin |
+| Fairy Water | Keeps weak monsters away for 127 steps | 38 | Brecconary (needs a key), Cantlin |
+| Wings | Takes you to Tantegel Castle, but not from inside a cave | 70 | Kol, Cantlin |
 
-You can carry six Herbs at most.
+You can carry six Herbs at most. An Herb restores more than the HEAL spell, which gives 10 to 17 hit points.
+
+A shop buys anything back for half of its price.
 
 ## Magic Keys
 
@@ -88,8 +94,10 @@ In Rimuldar the six keys come first, then a Broad Sword and Full Plate. After th
 
 The Death Necklace from the Mountain Cave and the Cursed Belt from Garin's Grave both curse you if you put them on. The necklace sells for 1,200 gold and the belt for 180. If you do get cursed, a man in Brecconary lifts it.
 
-The Fighter's Ring from the Mountain Cave can be worn, but in the NES version it changes nothing in a fight.
+While you are cursed, a game you load starts you with 1 hit point.
+
+The Fighter's Ring from the Mountain Cave can be worn, but it changes nothing in a fight. Putting it on sets a flag that only one townsman's line ever looks at. A shop pays 15 gold for it.
 
 ## Sources
 
-Prices and shop lists were collected in the towns of Dragon Warrior (USA) and checked against the notes the Retro Companion overlay shows for each town. The carry limits for keys and Herbs come from the game's code. [Retro Companion](/) shows the shop list of the town you are standing in.
+Prices and shop lists were collected in the towns of Dragon Warrior (USA) and checked against the notes the Retro Companion overlay shows for each town. The attack and defense numbers, the carry limits for keys and Herbs and what each item does come from the game's code. [Retro Companion](/) shows the shop list of the town you are standing in.

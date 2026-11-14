@@ -49,16 +49,18 @@ Level 30 costs 65,535 because the game keeps your experience in two bytes of mem
 
 | Spell | Level | Magic cost | What it does |
 | --- | --- | --- | --- |
-| HEAL | 3 | 4 | Restores some hit points |
-| HURT | 4 | 2 | Damages the enemy |
+| HEAL | 3 | 4 | Restores 10 to 17 hit points |
+| HURT | 4 | 2 | Does 5 to 12 damage |
 | SLEEP | 7 | 2 | Puts the enemy to sleep |
-| RADIANT | 9 | 3 | Lights up a cave |
+| RADIANT | 9 | 3 | Lights 7 by 7 tiles in a cave |
 | STOPSPELL | 10 | 2 | Stops the enemy from casting |
 | OUTSIDE | 12 | 6 | Takes you out of a cave |
 | RETURN | 13 | 8 | Takes you to Tantegel Castle |
-| REPEL | 15 | 2 | Keeps weak monsters away |
-| HEALMORE | 17 | 10 | Restores many hit points |
-| HURTMORE | 19 | 5 | Damages the enemy more |
+| REPEL | 15 | 2 | Keeps weak monsters away for 127 steps |
+| HEALMORE | 17 | 10 | Restores 85 to 100 hit points |
+| HURTMORE | 19 | 5 | Does 58 to 65 damage |
+
+The numbers are the ones in the game's code. Each healing or attack spell is a fixed number plus a small roll: HEAL is 10 plus a roll from 0 to 7. RADIANT does not stay at full size. After 80 steps the lit area shrinks to 5 by 5 tiles, 60 steps later to 3 by 3, and after 60 more only your own tile is lit. Cast it again and it is back to 7 by 7.
 
 Three of these change how you travel. RADIANT means you can stop buying Torches. OUTSIDE and RETURN together get you from the bottom of any cave back to the king in two casts, which costs 14 magic points. Keep that much in reserve when you go underground.
 
@@ -87,5 +89,7 @@ A won fight adds exactly the experience listed for that enemy. There is no bonus
 Metal Slimes give the most experience for their strength, but they run away often. Goldmen give little experience and a lot of gold, which is what you need before Cantlin.
 
 ## Sources
+
+The spell figures were read from the code of Dragon Warrior (USA). [What the game's code says](/guides/dragon-warrior-game-code-facts) gives the addresses.
 
 The level table is at address $F34B in the code of Dragon Warrior (USA) and has 30 entries. The first twenty match the table published by Gamer Corner Guides. Spell levels and costs come from the game's data. [Retro Companion](/) shows the experience left to your next level and your next spell while you play.

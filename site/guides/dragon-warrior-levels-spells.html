@@ -70,18 +70,19 @@
   <div class="table"><table>
     <thead><tr><th>Spell</th><th class="num">Level</th><th class="num">Magic cost</th><th>What it does</th></tr></thead>
     <tbody>
-      <tr><td>HEAL</td><td class="num">3</td><td class="num">4</td><td>Restores some hit points</td></tr>
-      <tr><td>HURT</td><td class="num">4</td><td class="num">2</td><td>Damages the enemy</td></tr>
+      <tr><td>HEAL</td><td class="num">3</td><td class="num">4</td><td>Restores 10 to 17 hit points</td></tr>
+      <tr><td>HURT</td><td class="num">4</td><td class="num">2</td><td>Does 5 to 12 damage</td></tr>
       <tr><td>SLEEP</td><td class="num">7</td><td class="num">2</td><td>Puts the enemy to sleep</td></tr>
-      <tr><td>RADIANT</td><td class="num">9</td><td class="num">3</td><td>Lights up a cave</td></tr>
+      <tr><td>RADIANT</td><td class="num">9</td><td class="num">3</td><td>Lights 7 by 7 tiles in a cave</td></tr>
       <tr><td>STOPSPELL</td><td class="num">10</td><td class="num">2</td><td>Stops the enemy from casting</td></tr>
       <tr><td>OUTSIDE</td><td class="num">12</td><td class="num">6</td><td>Takes you out of a cave</td></tr>
       <tr><td>RETURN</td><td class="num">13</td><td class="num">8</td><td>Takes you to Tantegel Castle</td></tr>
-      <tr><td>REPEL</td><td class="num">15</td><td class="num">2</td><td>Keeps weak monsters away</td></tr>
-      <tr><td>HEALMORE</td><td class="num">17</td><td class="num">10</td><td>Restores many hit points</td></tr>
-      <tr><td>HURTMORE</td><td class="num">19</td><td class="num">5</td><td>Damages the enemy more</td></tr>
+      <tr><td>REPEL</td><td class="num">15</td><td class="num">2</td><td>Keeps weak monsters away for 127 steps</td></tr>
+      <tr><td>HEALMORE</td><td class="num">17</td><td class="num">10</td><td>Restores 85 to 100 hit points</td></tr>
+      <tr><td>HURTMORE</td><td class="num">19</td><td class="num">5</td><td>Does 58 to 65 damage</td></tr>
     </tbody>
   </table></div>
+  <p>The numbers are the ones in the game's code. Each healing or attack spell is a fixed number plus a small roll: HEAL is 10 plus a roll from 0 to 7. RADIANT does not stay at full size. After 80 steps the lit area shrinks to 5 by 5 tiles, 60 steps later to 3 by 3, and after 60 more only your own tile is lit. Cast it again and it is back to 7 by 7.</p>
   <p>Three of these change how you travel. RADIANT means you can stop buying Torches. OUTSIDE and RETURN together get you from the bottom of any cave back to the king in two casts, which costs 14 magic points. Keep that much in reserve when you go underground.</p>
   <h2>What level for which part</h2>
   <p>These are the levels the Retro Companion walkthrough asks for. You can go earlier, but the fights get risky.</p>
@@ -104,13 +105,14 @@
   <p>A won fight adds exactly the experience listed for that enemy. There is no bonus and no random part. The Dragonlord is the exception: both of his forms give zero experience, so the last fight never raises your level.</p>
   <p>Metal Slimes give the most experience for their strength, but they run away often. Goldmen give little experience and a lot of gold, which is what you need before Cantlin.</p>
   <h2>Sources</h2>
+  <p>The spell figures were read from the code of Dragon Warrior (USA). <a href="/guides/dragon-warrior-game-code-facts">What the game's code says</a> gives the addresses.</p>
   <p>The level table is at address <span class="mono">$F34B</span> in the code of Dragon Warrior (USA) and has 30 entries. The first twenty match the table published by Gamer Corner Guides. Spell levels and costs come from the game's data. <a href="/">Retro Companion</a> shows the experience left to your next level and your next spell while you play.</p>
   <h2>More guides</h2>
   <ul class="more">
     <li><a href="/guides/dragon-warrior-walkthrough">Dragon Warrior walkthrough: the whole game in 32 steps</a></li>
     <li><a href="/guides/dragon-warrior-hidden-items">Where the hidden items are in Dragon Warrior</a></li>
     <li><a href="/guides/dragon-warrior-shops-prices">Dragon Warrior shops: every price, town by town</a></li>
-    <li><a href="/guides/dragon-warrior-game-code-facts">Eight things the code of Dragon Warrior says about how the game works</a></li>
+    <li><a href="/guides/dragon-warrior-game-code-facts">Twelve things the code of Dragon Warrior says about how the game works</a></li>
     <li><a href="/guides/dragon-warrior-history">From Dragon Quest to Dragon Warrior: how the game reached America</a></li>
   </ul>
 </main>

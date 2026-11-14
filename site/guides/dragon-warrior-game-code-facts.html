@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Eight things the code of Dragon Warrior says about how the game works</title>
-<meta name="description" content="What happens when you die, why level 30 stops at 65,535, how damage is worked out, and other rules of Dragon Warrior read from the game&#x27;s own code and memory.">
+<title>Twelve things the code of Dragon Warrior says about how the game works</title>
+<meta name="description" content="What happens when you die, why level 30 stops at 65,535, how damage is worked out, what every spell and item does in numbers, and other rules of Dragon Warrior read from the game&#x27;s own code.">
 <link rel="canonical" href="https://retro.dieergames.hu/guides/dragon-warrior-game-code-facts">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Retro Companion">
-<meta property="og:title" content="Eight things the code of Dragon Warrior says about how the game works">
-<meta property="og:description" content="What happens when you die, why level 30 stops at 65,535, how damage is worked out, and other rules of Dragon Warrior read from the game&#x27;s own code and memory.">
+<meta property="og:title" content="Twelve things the code of Dragon Warrior says about how the game works">
+<meta property="og:description" content="What happens when you die, why level 30 stops at 65,535, how damage is worked out, what every spell and item does in numbers, and other rules of Dragon Warrior read from the game&#x27;s own code.">
 <meta property="og:url" content="https://retro.dieergames.hu/guides/dragon-warrior-game-code-facts">
 <meta property="og:image" content="https://retro.dieergames.hu/img/share.png">
 <meta property="og:image:width" content="1200">
@@ -25,7 +25,7 @@
 </header>
 <main class="doc article">
   <p class="crumb"><a href="/guides">Guides</a> · Dragon Warrior</p>
-  <h1>Eight things the code of Dragon Warrior says about how the game works</h1>
+  <h1>Twelve things the code of Dragon Warrior says about how the game works</h1>
   <p>Retro Companion follows a game by reading its memory. To build that for Dragon Warrior, the game's code had to be read first. Some of what it says settles old questions that guides answer in different ways. Everything below is from Dragon Warrior (USA) on the NES. Addresses are given for readers who want to check them.</p>
   <h2>1. Dying costs half your gold, and the princess</h2>
   <p>The routine that runs when your hit points reach zero is at <span class="mono">$EDBB</span>. It does two things to your save. It halves your gold. It also clears the flag that says you are carrying Princess Gwaelin, so if you die on the way back to the castle with her, you are no longer carrying her. Your experience, items and equipment are left alone.</p>
@@ -50,10 +50,42 @@
   <p>Enemy hits use the same idea with your defense, but with a floor. If your defense is high enough to push the base under about half of the enemy's attack power, the game stops using the base and rolls a small number instead. So no amount of armor brings an enemy's hits down to nothing.</p>
   <p>For example, with attack power 40 against a Skeleton, whose defense is 22, the base is 40 minus 11, which is 29. Your hits do 7 to 14.</p>
   <div class="tool" data-tool="damage"><div class="fields"><div><label for="d-atk">Your attack power</label><input id="d-atk" type="number" inputmode="numeric" min="0" max="255" placeholder="40"></div><div><label for="d-edef">Enemy defense</label><input id="d-edef" type="number" inputmode="numeric" min="0" max="255" placeholder="22"></div><div><label for="d-eatk">Enemy attack power</label><input id="d-eatk" type="number" inputmode="numeric" min="0" max="255" placeholder="28"></div><div><label for="d-def">Your defense power</label><input id="d-def" type="number" inputmode="numeric" min="0" max="255" placeholder="36"></div></div><p class="out" id="dmg-out" aria-live="polite">Fill in the four numbers. The example in the text uses 40 and 22</p></div>
+  <h2>9. Spells and Herbs are a fixed number plus a small roll</h2>
+  <p>HEAL takes a random number from 0 to 7 and adds 10. That is the whole spell, at <span class="mono">$DBB8</span>. The others are built the same way.</p>
+  <div class="table"><table>
+    <thead><tr><th>What</th><th class="num">Lowest</th><th class="num">Highest</th></tr></thead>
+    <tbody>
+      <tr><td>Herb</td><td class="num">23</td><td class="num">30</td></tr>
+      <tr><td>HEAL</td><td class="num">10</td><td class="num">17</td></tr>
+      <tr><td>HEALMORE</td><td class="num">85</td><td class="num">100</td></tr>
+      <tr><td>HURT</td><td class="num">5</td><td class="num">12</td></tr>
+      <tr><td>HURTMORE</td><td class="num">58</td><td class="num">65</td></tr>
+      <tr><td>An enemy's HURT</td><td class="num">3</td><td class="num">10</td></tr>
+      <tr><td>An enemy's HURTMORE</td><td class="num">30</td><td class="num">45</td></tr>
+      <tr><td>An enemy's HEAL</td><td class="num">20</td><td class="num">27</td></tr>
+      <tr><td>An enemy's HEALMORE</td><td class="num">85</td><td class="num">100</td></tr>
+      <tr><td>Fire breath</td><td class="num">16</td><td class="num">23</td></tr>
+      <tr><td>Strong fire breath</td><td class="num">65</td><td class="num">72</td></tr>
+    </tbody>
+  </table></div>
+  <p>An Herb restores more than HEAL does, 23 at worst against 17 at best. The enemy versions of HURT and HURTMORE are weaker than yours. The enemy's HEAL is stronger than yours, and its HEALMORE is the same.</p>
+  <h2>10. Light and REPEL count your steps</h2>
+  <p>A Torch sets the lit area to 3 by 3 tiles, at <span class="mono">$DD47</span>, and it stays that way until you leave the cave. RADIANT raises it to 7 by 7 and starts a counter of 80 steps. When the counter runs out, the lit area loses two tiles in each direction and the counter starts again at 60. So RADIANT gives 80 steps at 7 by 7, then 60 at 5 by 5, then 60 at 3 by 3. After that only your own tile is lit.</p>
+  <p>REPEL and Fairy Water share one counter. REPEL sets it to 255 and Fairy Water to 254, and every step takes 2 off. Both last 127 steps. The odd and the even start let the game tell them apart when the counter ends, so it can print the right message.</p>
+  <p>Wings do not work inside a cave. The check is at <span class="mono">$DD73</span>.</p>
+  <h2>11. What the two best armors do</h2>
+  <p>Magic Armor has the same defense as Full Plate. Its extra is a step counter: on every fourth step you get one hit point back, at <span class="mono">$CD06</span>. Erdrick's Armor gives one back on every step.</p>
+  <p>A swamp tile costs 2 hit points and a barrier tile 15. In Erdrick's Armor both cost nothing. Magic Armor does not help here.</p>
+  <p>When an enemy casts HURT or HURTMORE at you, the game checks your armor at <span class="mono">$EC36</span>. In Erdrick's Armor or Magic Armor it divides the damage by three, drops the remainder and doubles the result, so you take about two thirds. Fire breath gets the same cut at <span class="mono">$ECFC</span>, but in Erdrick's Armor only.</p>
+  <p>An enemy's STOPSPELL works one time in two. Against Erdrick's Armor it never works.</p>
+  <h2>12. The Fighter's Ring sets a flag that nothing uses</h2>
+  <p>Putting on the Fighter's Ring sets one bit at address <span class="mono">$CF</span>, at <span class="mono">$DFD1</span>. In the whole cartridge that bit is read in one other place, at <span class="mono">$D2BF</span>: the dialog of a townsman who remarks on the ring. The routine that works out your attack power takes your strength and the weapon table and never looks at it.</p>
+  <p>The Dragon's Scale is the opposite case. It also sets a bit at <span class="mono">$CF</span>, and the routine at <span class="mono">$F0FE</span> that works out your defense adds 2 when that bit is set.</p>
+  <p>The two cursed items set bits there as well. While either is set, a game you load starts you with 1 hit point, at <span class="mono">$CB6B</span>.</p>
   <h2>One more, for map makers</h2>
   <p>The maps are packed two ways. Maps with a number below 12 use four bits for each tile. Maps from 12 up use three bits. The dungeon tile set starts only at map 15, so the cellar of Tantegel and the two shrines, maps 12 to 14, are three-bit maps drawn with the town tiles.</p>
   <h2>Sources</h2>
-  <p>The addresses refer to the code of Dragon Warrior (USA), first release. The memory locations agree with the public RAM map of the game's disassembly by nmikstas. The enemy numbers were read from the cartridge. <a href="/">Retro Companion</a> uses these same rules to show enemy stats and your damage range during a fight.</p>
+  <p>The addresses refer to the code of Dragon Warrior (USA), first release. The memory locations agree with the public RAM map of the game's disassembly by nmikstas. The routines for spells, items and armor were found with the same disassembly, and their bytes were then read from the cartridge. The enemy numbers were read from the cartridge. <a href="/">Retro Companion</a> uses these same rules to show enemy stats and your damage range during a fight.</p>
   <h2>More guides</h2>
   <ul class="more">
     <li><a href="/guides/dragon-warrior-walkthrough">Dragon Warrior walkthrough: the whole game in 32 steps</a></li>

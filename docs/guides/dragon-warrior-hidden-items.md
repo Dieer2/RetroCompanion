@@ -30,7 +30,7 @@ Stepping on it starts a fight with an Axe Knight, and you cannot run. After you 
 
 Come at level 17 or higher. The Axe Knight casts SLEEP, so cast STOPSPELL until it works, then attack and heal with HEALMORE.
 
-The armor is worth the trouble. It heals one hit point per step, it protects you from swamp and barrier tiles, and it cuts fire and HURT damage by a third.
+The armor is worth the trouble. It heals one hit point on every step. Swamp and barrier tiles no longer hurt you; without it they cost 2 and 15 hit points a step. An enemy's HURT, HURTMORE and fire breath do two thirds of their damage, and an enemy's STOPSPELL never works on you.
 
 ## Erdrick's Token
 
