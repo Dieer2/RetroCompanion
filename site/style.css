@@ -45,6 +45,7 @@ h2 { font-weight: 400; font-size: 28px; line-height: 1.15; margin: 0 0 8px; }
 .btn.quiet:hover { background: #302d29; color: var(--text); }
 /* the pay button shows only once push.sh has filled in the address */
 .pay[href^="{{"], .pay[href^="{{"] ~ .live, .pay:not([href^="{{"]) ~ .soon { display: none; }
+a.ext { text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 3px; }
 .meta { color: var(--muted); font-family: var(--mono); font-size: 13px; }
 
 .shot { margin: 0; }
