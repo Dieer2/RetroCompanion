@@ -12,16 +12,20 @@ The overlay is a set of modules, each its own small always-on-top window:
     notes    notes about the current place
     toast    "achievement unlocked", shown for a few seconds when one is earned
     tracker  the achievements closest to completion (an extra bought in the profile shop)
+    ach      every achievement of the game, one group at a time, earned or still open
+    log      what happened, newest first: enemies beaten, levels, items, steps, achievements
 
 Every module can be collapsed (arrow in its header), resized (drag its right edge for the
 width, its bottom edge for the height, the corner for both; text re-wraps, the map rescales
 to fit) and moved (drag its header). Height follows the content until it is set by hand;
 then longer content is clipped and scrolls with the mouse wheel, and a double-click on the
-bottom edge hands the height back to the content. Until a module is moved it is
+bottom edge hands the height back to the content. The two list modules (ach, log) start
+with a height limit, so a long list scrolls instead of running off the screen. Until a module is moved it is
 docked: it sits in a column under the guide and follows it. Moving it tears it off; "Reset
 layout" in the right-click menu docks everything again. Layout is saved per game.
 """
 import sys
+import time
 
 from . import theme as T
 from .profile import grade
@@ -29,9 +33,12 @@ from .profile import grade
 WIDTH = 380            # default module width
 PAD = T.S3             # inner padding of a module
 GAP = T.S2             # space between docked modules
-ORDER = ("guide", "toast", "hero", "tracker", "battle", "map", "notes")
+ORDER = ("guide", "toast", "hero", "tracker", "battle", "map", "notes", "ach", "log")
 TOAST_MS = 9000        # how long an "achievement unlocked" module stays up
-TOGGLE = {"hero": "self", "battle": "battle", "map": "map", "notes": "loc", "tracker": "tracker"}   # module -> show flag
+TOGGLE = {"hero": "self", "battle": "battle", "map": "map", "notes": "loc", "tracker": "tracker",
+          "ach": "ach", "log": "log"}       # module -> show flag
+LOG_ROWS = 40          # how many log lines the module shows (the store keeps more)
+LIST_H = 300           # height limit of the list modules until the player sets one
 
 
 class Ctx:
@@ -136,9 +143,10 @@ class Panel:
     """One module window: header (drag to move), body rows, right edge (drag to resize)."""
     MINW, MAXW, MINH = 240, 720, 72
 
-    def __init__(self, ov, name, tools=(), with_dot=False):
+    def __init__(self, ov, name, tools=(), with_dot=False, limit=None):
         tk = self.tk = ov.tk
         self.ov, self.name = ov, name
+        self.limit = limit          # a height the content may grow to before it scrolls (None: no limit)
         self.cfg = ov.ui.setdefault("panels", {}).setdefault(name, {})
         self.w = max(self.MINW, min(self.MAXW, int(self.cfg.get("w", WIDTH))))
         self.collapsed = bool(self.cfg.get("collapsed", False))
@@ -265,6 +273,8 @@ class Panel:
     def auto_height(self, e=None):
         """Back to a height that follows the content (double-click the bottom edge)."""
         if self.cfg.pop("h", None) is not None:
+            if self.limit:
+                self.cfg["h"] = 0           # 0 = follow the content, without the starting limit
             self.ov.save_ui()
             self.ov.render(force=True)
 
@@ -288,7 +298,8 @@ class Panel:
             return
         ov = self.ov
         sig = tuple((k, MapView.sig(v) if k == "map" else v, g, a) for k, v, g, a in rows)
-        fixed = self.cfg.get("h")
+        fixed = self.cfg.get("h") or None
+        cap = self.limit if "h" not in self.cfg else None       # no height chosen yet: the content up to the limit
         key = (title, sig, dot, self.w, fixed, self.collapsed, ov.fsize)
         if key != self._key:
             self._key = key
@@ -334,6 +345,8 @@ class Panel:
                 bw = self.w - 2
                 self.body_h = self.body.winfo_reqheight()
                 self.view_h = self.body_h if room is None else room      # set height: clip, wheel scrolls
+                if cap and room is None:
+                    self.view_h = min(self.body_h, max(0, cap - chrome))
                 self.view.itemconfigure("b", width=bw)
                 self.view.configure(width=bw, height=self.view_h,
                                     scrollregion=(0, 0, bw, max(self.body_h, self.view_h)))
@@ -361,10 +374,12 @@ class Panel:
 
 
 class Overlay:
-    def __init__(self, tk, master, plugin, progress, ui, save_ui, on_close, ach=None, modules=()):
+    def __init__(self, tk, master, plugin, progress, ui, save_ui, on_close, ach=None, modules=(), log=None):
         self.tk = tk
         self.master = master
-        self.ach = ach              # the game's Achievements, for the tracker module
+        self.ach = ach              # the game's Achievements, for the tracker and the list
+        self.log = log if log is not None else []      # [[unix time, text]], oldest first; the dashboard appends
+        self.ach_page = 0           # which group the achievements module shows
         self.modules = set(modules) # extra modules the player owns and has switched on
         self.p = plugin
         self.progress = progress
@@ -375,7 +390,7 @@ class Overlay:
         self.conn = "offline"       # live | nostate | nocore | offline
         self.conn_msg = ""
         self.view = None            # None = follow progress automatically
-        self.show = {k: ui.get(k, True) for k in ("loc", "map", "self", "zoom", "battle", "tracker")}
+        self.show = {k: ui.get(k, True) for k in ("loc", "map", "self", "zoom", "battle", "tracker", "ach", "log")}
         self.alpha = float(ui.get("alpha", 0.92))
         self.fsize = int(ui.get("fsize", 10))
         self.closed = False
@@ -388,7 +403,8 @@ class Overlay:
             m.add_command(label=label, command=lambda a=act: self.action(a))
         m.add_separator()
         for label, act in (("Map  (M)", "map"), ("Map zoom  (Z)", "zoom"), ("My stats  (S)", "self"),
-                           ("Location notes  (L)", "loc"), ("Battle module", "battle")) + (
+                           ("Location notes  (L)", "loc"), ("Battle module", "battle"),
+                           ("Achievements", "ach"), ("Event log", "log")) + (
                            (("Trophy tracker", "tracker"),) if "tracker" in self.modules else ()) + (
                            ("Collapse / expand all  (H)", "hide"), ("Reset layout", "reset")):
             m.add_command(label=label, command=lambda a=act: self.action(a))
@@ -411,6 +427,8 @@ class Overlay:
             "battle": Panel(self, "battle"),
             "map": Panel(self, "map", tools=(("minus", "zoom"),)),
             "notes": Panel(self, "notes"),
+            "ach": Panel(self, "ach", tools=(("left", "ach_prev"), ("right", "ach_next")), limit=LIST_H),
+            "log": Panel(self, "log", limit=LIST_H),
         }
         self.set_alpha(0)
         self.render()
@@ -464,6 +482,9 @@ class Overlay:
             self.view = max(0, shown - 1)
         elif a == "auto":
             self.view = None
+        elif a in ("ach_prev", "ach_next"):
+            self.ach_page += 1 if a == "ach_next" else -1
+            self.panels["ach"].view.yview_moveto(0)
         elif a == "done":
             self.progress.toggle(shown)
             self.view = None
@@ -578,6 +599,45 @@ class Overlay:
 
         notes = pv.get("notes", ()) if self.show["loc"] else ()
         P["notes"].set("Notes", [R("body", x, T.S2) for x in notes])
+
+        rows, title = [], "Achievements"
+        if self.show["ach"] and self.ach is not None and self.ach.items:
+            A = self.ach
+            groups = []
+            for a in A.items:
+                if a.get("group", "") not in groups:
+                    groups.append(a.get("group", ""))
+            self.ach_page %= len(groups)
+            grp = groups[self.ach_page]
+            mine = [a for a in A.items if a.get("group", "") == grp]
+            got = sum(1 for a in mine if a["id"] in A.unlocked)
+            title = "Achievements  %d / %d" % (A.count(), len(A.items))
+            rows.append(R("meta", "%s · %d of %d · group %d of %d" % (grp or "General", got, len(mine),
+                                                                     self.ach_page + 1, len(groups)), 0))
+            for a in mine:
+                when = A.unlocked.get(a["id"])
+                if when:
+                    rows.append(R("strong", a["title"], T.S2))
+                    rows.append(R("meta", "%s · +%d points · earned %s" % (
+                        a["text"], a["points"], time.strftime("%d %b", time.localtime(when))), 0))
+                elif a.get("secret"):
+                    rows.append(R("body", "Hidden achievement", T.S2))
+                    rows.append(R("meta", "Shown when you earn it · %d points" % a["points"], 0))
+                else:
+                    pr = A.progress.get(a["id"])
+                    rows.append(R("body", a["title"], T.S2))
+                    rows.append(R("meta", "%s · %s%d points" % (
+                        a["text"], "%s / %s · " % ("{:,}".format(pr[0]), "{:,}".format(pr[1])) if pr and pr[1] > 1 else "",
+                        a["points"]), 0))
+        P["ach"].set(title, rows)
+
+        rows = []
+        if self.show["log"]:
+            for i, (when, text) in enumerate(reversed(self.log[-LOG_ROWS:])):
+                rows.append(R("body" if i == 0 else "meta", "%s  %s" % (time.strftime("%H:%M", time.localtime(when)), text),
+                              0 if i == 0 else 2))
+            rows = rows or [R("meta", "Nothing has happened yet. Wins, levels, items, steps and achievements show up here")]
+        P["log"].set("Log", rows)
         self.layout()
 
     def layout(self):

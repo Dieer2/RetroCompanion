@@ -252,4 +252,22 @@ pc3.call("POST", "/api/account/delete", {"password": "test-pass-2"})
 assert pc3.call("GET", "/api/leaderboard")["total"] == 1 and fails(lambda: pc3.call("POST", "/api/sync", {"state": {}}), 401)
 row = svc.db.execute("SELECT pw, state FROM users").fetchone(); assert b"test-pass" not in row[0] and "test-pass" not in row[1]
 httpd.shutdown(); del os.environ["RC_SERVER"]; print("account server OK")
+# a beaten enemy: the HP byte wraps below zero and must read as 0, never as a full bar; the log lines
+from companion.overlay import Ctx
+def G(**k):
+    r = bytearray(0x8000); d = dict(map=1, level=5, hp=20, maxhp=30); d.update(k); setram(r, **d)
+    return DW.Game(bytes(r[:0x110]), bytes(r[0x6000:0x6030]))
+g = G(en_id=0, en_hp=245, en_stats=EN[0], chr=3); assert g.en_hp == 0 and g.in_battle
+P._fight = (0, 3); b = P.view(g, Ctx(P.steps[0], 0, False))["battle"]
+assert b["title"] == "SLIME   defeated" and b["frac"] == 0 and "more hit" not in " ".join(b["lines"])
+g = G(en_id=0, en_hp=3, en_stats=EN[0], chr=3); assert g.en_hp == 3
+assert "HP 3 / 3" in P.view(g, Ctx(P.steps[0], 0, False))["battle"]["title"]
+assert G(en_id=35, en_hp=160, en_stats=EN[35], chr=3).en_hp == 160           # the Stoneman's full 160 is real
+before = G(exp=10, gold=5, en_id=0, en_stats=EN[0], en_hp=2, chr=3)
+assert P.events(G(exp=11, gold=7, en_id=0, en_stats=EN[0], en_hp=250, chr=3), before) == ["Defeated Slime \u00b7 +1 XP, +2 G"]
+assert P.events(G(level=7), G(level=6)) == ["Reached level 7. Learned SLEEP"]
+assert P.events(G(map=7), G()) == ["Entered Kol"] and P.events(G(), None) == []
+assert P.events(G(items=[5]), G()) == ["Got Fairy Flute"] and P.events(G(equip=0x60), G(equip=0x20)) == ["Equipped Copper Sword"]
+assert P.events(G(hp=0), G()) == ["Fell in battle. Half of the gold is lost"]
+print("battle bar and log lines OK")
 print("ALL OK")

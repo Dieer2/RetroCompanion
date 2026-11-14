@@ -82,6 +82,11 @@ class GamePlugin:
         """True/False, or (current, total) for a counted achievement."""
         return False
 
+    def events(self, state, prev):
+        """Short lines for the overlay's log about what changed between prev and state
+        (an enemy beaten, a level gained, an item found). prev is None on the first state."""
+        return ()
+
     # -- presentation ------------------------------------------------------------
     def view(self, state, ctx):
         """Return a dict; every key is optional:

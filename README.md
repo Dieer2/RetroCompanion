@@ -49,8 +49,15 @@ window (the shortcuts are left alone in every other program, and when no overlay
 
 ## Overlay modules
 
-The overlay is five small windows: the guide (current step), your stats, the battle (only
-during a fight), the map and the location notes. Each one can be
+The overlay is a set of small windows: the guide (current step), your stats, the battle
+(only during a fight), the map, the location notes, the achievements and the log.
+
+The achievements module lists every achievement of the game one group at a time, earned or
+still open; the arrows in its header page through the groups. The log shows what happened,
+newest first: enemies beaten, levels gained, items found, steps finished, achievements earned.
+It is kept on this computer. Both lists scroll with the mouse wheel.
+
+Each module can be
 
 - **moved**: drag its header. Until you move a module it stays docked in a column under the
   guide and follows it; a column that would run off the screen continues beside it.

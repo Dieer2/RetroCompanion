@@ -381,6 +381,10 @@ class Game:
         self.radiant, self.repel = r[0xDA], r[0xDB]
         self.en_id, self.en_hp = r[0xE0], r[0xE2]
         self.en_stats = list(r[0x100:0x108]) if len(r) >= 0x108 else None
+        # The killing blow takes the enemy's HP byte below zero and it wraps around (245 is -11).
+        # No enemy ever has more than its base HP, so a larger number is a beaten enemy.
+        if self.en_hp > (self.en_stats[2] if self.en_stats and self.en_stats[2] else 200):
+            self.en_hp = 0
         self.valid = (1 <= self.level <= 30) and (1 <= self.map <= 0x1D) and self.maxhp > 0
         # Which adventure this is: the first four letters of the hero's name (DispName0-3,
         # 0xB5-0xB8) plus, when cartridge RAM is readable, the save file number (0x6039).
@@ -918,7 +922,8 @@ def battle_lines(g, max_seen):
     lines.append("Your spell odds: SLEEP %s · STOPSPELL %s · HURT/HURTMORE %s · dodges %d/64"
                  % (ok(agi >> 4), ok(agi & 15), ok(mdef >> 4), mdef & 15))
     avg = (lo + hi) / 2.0
-    hits = "" if avg <= 0 else "  (about %d more hit%s)" % (max(1, int(-(-g.en_hp // avg))), "" if g.en_hp <= avg else "s")
+    hits = "" if avg <= 0 or g.en_hp <= 0 else "  (about %d more hit%s)" % (
+        max(1, int(-(-g.en_hp // avg))), "" if g.en_hp <= avg else "s")
     lines.append("Your hit: %d-%d%s   ·   its hit: %d-%d" % (lo, hi, hits, elo, ehi))
     st = []
     if g.pflags & 0x40:
@@ -1082,6 +1087,32 @@ class DragonWarrior(GamePlugin):
     def achieved(self, ach, g, m):
         return ach["test"](g, g.flags(), m)
 
+    def events(self, g, prev):
+        """What just happened, for the overlay's log. Only changes inside one play count:
+        another hero (a loaded save file) or a brand-new game says nothing."""
+        if prev is None or prev.hero != g.hero or self.is_fresh_start(g):
+            return []
+        out = []
+        if prev.map != g.map:
+            return ["Entered %s" % MAPS.get(g.map, "an unknown place")]
+        gain = g.exp - prev.exp
+        if prev.en_stats and gain > 0 and gain == prev.en_stats[6] and prev.en_id < len(ENEMIES):
+            won = g.gold - prev.gold
+            out.append("Defeated %s · +%d XP%s" % (ENEMIES[prev.en_id], gain, ", +%d G" % won if won > 0 else ""))
+        if prev.hp > 0 and g.hp == 0:
+            out.append("Fell in battle. Half of the gold is lost")
+        if g.level > prev.level:
+            spell = SPELLS.get(g.level)
+            out.append("Reached level %d%s" % (g.level, ". Learned %s" % spell if spell else ""))
+        new = sorted(g.items - prev.items)
+        if 0 < len(new) <= 2:
+            out += ["Got %s" % ITEMS[i] for i in new if i in ITEMS]
+        for name, table, now, was in (("weapon", WEAPONS, g.weapon, prev.weapon), ("armor", ARMORS, g.armor, prev.armor),
+                                      ("shield", SHIELDS, g.shield, prev.shield)):
+            if now != was and now:
+                out.append("Equipped %s" % table[now])
+        return out
+
     def run_line(self):
         """One line for the stats module: is this adventure being followed, and how is it going."""
         run = self._run
@@ -1149,7 +1180,8 @@ class DragonWarrior(GamePlugin):
             if not self._fight or self._fight[0] != g.en_id or g.en_hp > self._fight[1]:
                 self._fight = (g.en_id, g.en_hp)
             mx = max(1, self._fight[1])
-            v["battle"] = {"title": "%s   HP %d / %d" % (ENEMIES[g.en_id].upper(), g.en_hp, mx),
+            hp = "HP %d / %d" % (g.en_hp, mx) if g.en_hp > 0 else "defeated"
+            v["battle"] = {"title": "%s   %s" % (ENEMIES[g.en_id].upper(), hp),
                            "frac": g.en_hp / float(mx), "lines": battle_lines(g, mx)}
         else:
             self._fight = None

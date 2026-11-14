@@ -24,6 +24,7 @@ HOTKEYS = {0x27: "next", 0x25: "prev", 0x44: "done", 0x48: "hide", 0x41: "auto",
            0x4D: "map", 0x53: "self", 0x5A: "zoom"}
 
 
+LOG_KEEP = 300                    # log lines kept per game (this computer only, not synced)
 HOTKEY_APPS = ("retroarch",)      # program names (lowercase, start of the file name) the hotkeys work in
 
 
@@ -157,6 +158,7 @@ class App:
         self.live_pid = None        # plugin id of the running game
         self.live_conn = "offline"
         self.last_frame = 0.0
+        self._prev = {}             # game id -> the state before the latest one, for the plugin's events()
         self.dirty = False
         self.last_save = time.time()
         self._sig = None
@@ -973,7 +975,8 @@ class App:
         p = self.by_id[pid]
         ui = self.store.game(pid).setdefault("ui", {})
         self.overlay = Overlay(self.tk, self.root, p, self.progress[pid], ui, self.mark_dirty, self.overlay_closed,
-                               ach=self.ach[pid], modules=self.profile.modules())
+                               ach=self.ach[pid], modules=self.profile.modules(),
+                               log=self.store.game(pid).setdefault("log", []))
         self.overlay_pid = pid
 
     def overlay_closed(self):
@@ -1111,17 +1114,31 @@ class App:
         self.live_conn = conn
         if state is not None:
             gs = self.store.game(pid)
-            self.progress[pid].observe(state)
+            log = gs.setdefault("log", [])              # what happened, for the overlay's log module
+            pr = self.progress[pid]
+            was = [pr.is_done(i) for i in range(len(p.steps))]
+            pr.observe(state)
+            for i, s in enumerate(p.steps):
+                if not was[i] and pr.is_done(i):
+                    log.append([now, "Step %d done: %s" % (i + 1, s["title"])])
+            try:
+                for text in p.events(state, self._prev.get(pid)) or ():
+                    log.append([now, str(text)])
+            except Exception:                           # a plugin bug must not stop the polling
+                pass
+            self._prev[pid] = state
             dt = min(2.0, max(0.0, now - self.last_frame)) if st is None or st["state"] == "PLAYING" else 0.0
             gs["playtime"] = gs.get("playtime", 0) + dt
             ach = self.ach[pid]
             self._unsynced = True
             for a in ach.observe(state, dt):
+                log.append([now, "Achievement: %s (+%d points)" % (a["title"], a["points"])])
                 self.root.after(500, self.sync)        # a new trophy goes to the server right away
                 if self.overlay and self.overlay_pid == pid:
                     self.overlay.toast(a, ach.count(), len(ach.items))
                 if self.sel.id == pid:
                     self.say("Achievement unlocked: %s (+%d points)" % (a["title"], a["points"]))
+            del log[:-LOG_KEEP]                         # in place: the overlay holds this very list
             gs["last_played"] = now
             gs["summary"] = p.summary(state)
             self.dirty = True
