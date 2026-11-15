@@ -7,10 +7,10 @@ something on the website.
 """
 
 NEWS = [
-    dict(date="2026-11-15", title="Version 0.11", items=[
+    dict(date="2026-11-15", title="Version 0.11.1", items=[
         "Last save: the library and the overlay tell which RetroArch save state slot you saved to last and "
         "when, and when you last saved inside the game. A save you make while playing also goes into the "
-        "event log with its slot number",
+        "event log with its slot number. The compact stats strip shows the last save too",
         "Play time: the time played in the game, in the adventure in hand, and in all games together. When a "
         "game is beaten, the play time it took is kept",
     ]),

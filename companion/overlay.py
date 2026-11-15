@@ -670,6 +670,7 @@ class Overlay:
         self._toast_timer = None
         self.popup = Popup(self)
         self.info = []              # lines the library adds to the stats module (play time, last save)
+        self.info_short = ""        # the one of them that also shows in the module's compact form
         self.tips, self._tip_re, self._tip_names = {}, None, None       # what the plugin can explain
         self._fonts = {}            # font description -> Font, for finding the word under the pointer
         self.tipwin = Tip(self)
@@ -894,10 +895,11 @@ class Overlay:
             except self.tk.TclError:
                 pass
 
-    def set_info(self, lines):
-        """Lines from the library for the stats module; redraws only when they change."""
-        if list(lines) != self.info:
-            self.info = list(lines)
+    def set_info(self, lines, short=""):
+        """Lines from the library for the stats module (short: one line for its compact form);
+        redraws only when they change."""
+        if list(lines) != self.info or short != self.info_short:
+            self.info, self.info_short = list(lines), short
             self.render()
 
     def update(self, conn, state, msg=""):
@@ -978,7 +980,8 @@ class Overlay:
             rows += [R("meta", x, T.S2 if i == 0 else T.S1) for i, x in enumerate(pv.get("self", ()))]
             rows += [R("meta", x, T.S2 if i == 0 else T.S1) for i, x in enumerate(self.info)]
         P["hero"].set(pv.get("location", p.title), rows,
-                      short=("heart", sh.get("stats") or pv.get("stats") or "", [], None))
+                      short=("heart", sh.get("stats") or pv.get("stats") or "",
+                             [R("meta", self.info_short, 0)] if self.info_short else [], None))
 
         b = pv.get("battle") if self.show["battle"] else None
         rows = []

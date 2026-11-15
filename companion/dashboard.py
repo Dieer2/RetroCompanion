@@ -526,11 +526,13 @@ class App:
         if self.overlay and self.overlay_pid == pid:
             lines = ["Play time %s%s · all games %s" % (
                 fmt_time(gs.get("playtime")), "".join(" · " + n for n in self.time_notes(pid)), fmt_time(self.total_playtime()))]
+            short = ""
             if found["states"]:
-                lines.append("Last save state: %s" % self.save_text(found["states"][:1]).lower().replace(" · ", ", "))
+                short = "Last save state: %s" % self.save_text(found["states"][:1]).lower().replace(" · ", ", ")
+                lines.append(short)
             if found["battery"]:
                 lines.append("Last in-game save: %s" % fmt_when(found["battery"]))
-            self.overlay.set_info(lines)
+            self.overlay.set_info(lines, short or (lines[-1] if found["battery"] else ""))
 
     def trophy_line(self):
         t = self.profile.trophies()
