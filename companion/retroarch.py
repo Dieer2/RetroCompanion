@@ -175,6 +175,68 @@ def config_value(exe, key):
     return None
 
 
+# -- where RetroArch keeps its saves --------------------------------------------
+def _folder(exe, key, default):
+    """A directory setting of retroarch.cfg as a real path (":" stands for RetroArch's own folder)."""
+    base = os.path.dirname(os.path.abspath(exe)) if exe else ""
+    v = (config_value(exe, key) or "").strip()
+    if v in ("", "default"):
+        v = ":" + os.sep + default
+    if v.startswith(":"):
+        v = os.path.join(base, v[1:].lstrip("\\/"))
+    return os.path.expanduser(v)
+
+
+def _files(folder, depth=1):
+    """The files of a folder and of its sub-folders (RetroArch may sort saves by core or by system)."""
+    try:
+        with os.scandir(folder) as it:
+            for e in it:
+                if e.is_file():
+                    yield e
+                elif depth and e.is_dir():
+                    for f in _files(e.path, depth - 1):
+                        yield f
+    except OSError:
+        return
+
+
+def save_files(exe, content, rom=""):
+    """What RetroArch has saved for a game whose content name is `content` (the file name without
+    its extension): {"states": [(slot, time)], newest first, "battery": time or None}.
+    A slot is a number (0 for the plain .state file) or "auto". Read-only: it only looks at file times."""
+    out = {"states": [], "battery": None}
+    if not content:
+        return out
+    here = os.path.dirname(rom) if rom else ""
+    for key, default, in_content, kind in (("savestate_directory", "states", "savestates_in_content_dir", "state"),
+                                           ("savefile_directory", "saves", "savefiles_in_content_dir", "battery")):
+        folders = [_folder(exe, key, default)]
+        if here and config_value(exe, in_content) == "true":
+            folders.append(here)
+        for folder in folders:
+            for f in _files(folder, 1 if folder != here else 0):
+                name = f.name
+                if not name.startswith(content + "."):
+                    continue
+                tail = name[len(content) + 1:]
+                try:
+                    when = f.stat().st_mtime
+                except OSError:
+                    continue
+                if kind == "battery":
+                    if tail in ("srm", "sav"):
+                        out["battery"] = max(out["battery"] or 0, when)
+                elif tail == "state":
+                    out["states"].append((0, when))
+                elif tail == "state.auto":
+                    out["states"].append(("auto", when))
+                elif tail.startswith("state") and tail[5:].isdigit():
+                    out["states"].append((int(tail[5:]), when))
+    out["states"].sort(key=lambda s: -s[1])
+    return out
+
+
 def launch(exe, core_path, rom, port=DEFAULT_PORT):
     """Start RetroArch with a core and content. Network commands are switched on for this
     session through an appended config file, so the user's own retroarch.cfg is not edited here."""

@@ -117,6 +117,18 @@ SHA-256 the release lists, puts it in the place of the running one and starts it
 and progress are not touched. The check can be switched off in the settings; a click on the
 version number checks by hand. Run from source, the window only points to the release page.
 
+## Saves and play time
+
+RetroArch does not say which save state slot you used last. The library's "Last save" tile and
+the overlay's stats module do: the slot and the time of the newest save state, and the time
+of the last save inside the game (the battery save). They are read from the times of the
+files in RetroArch's save folders; nothing is written there. A save made while you play is
+also noted in the event log.
+
+"Play time" is the time the companion has seen the game running. Under it: the adventure in
+hand, where the plugin tells adventures apart, and the play time the game was beaten in. The
+profile block adds up all games.
+
 ## Ideas
 
 "Ideas" at the bottom of the sidebar, and the Ideas page of the website, list the features

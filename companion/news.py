@@ -7,6 +7,13 @@ something on the website.
 """
 
 NEWS = [
+    dict(date="2026-11-15", title="Version 0.11", items=[
+        "Last save: the library and the overlay tell which RetroArch save state slot you saved to last and "
+        "when, and when you last saved inside the game. A save you make while playing also goes into the "
+        "event log with its slot number",
+        "Play time: the time played in the game, in the adventure in hand, and in all games together. When a "
+        "game is beaten, the play time it took is kept",
+    ]),
     dict(date="2026-11-14", title="Version 0.10.1", items=[
         "The figures in the item and spell tips are now read from the game's own code: Herb 23 to 30 HP, HEAL "
         "10 to 17, HEALMORE 85 to 100, HURT 5 to 12, HURTMORE 58 to 65, a Torch lights 3 by 3 tiles and "

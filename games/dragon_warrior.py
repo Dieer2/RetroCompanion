@@ -1254,6 +1254,7 @@ class DragonWarrior(GamePlugin):
         if run is not None:
             run["time"] = run.get("time", 0.0) + dt
         self._run = run
+        m["last_run"] = g.hero
         maps = m.setdefault("maps", [])
         if g.map not in maps:
             maps.append(g.map)
@@ -1323,6 +1324,12 @@ class DragonWarrior(GamePlugin):
             if now != was and now:
                 out.append("Equipped %s" % table[now])
         return out
+
+    final_step = "dlord"
+
+    def playthrough(self, memo):
+        run = (memo.get("runs") or {}).get(memo.get("last_run"))
+        return run.get("time") if run else None
 
     def run_line(self):
         """One line for the stats module: is this adventure being followed, and how is it going."""

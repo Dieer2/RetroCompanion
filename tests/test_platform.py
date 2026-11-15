@@ -458,4 +458,30 @@ assert DW.enemy_spells(0x0F, 6) == ["strong fire breath 75% (65-72 damage)"]    
 assert DW.enemy_spells(0x0F, 7) == ["strong fire breath 75% (42-48 damage in your armor)"]
 assert DW.enemy_spells(0x62) == ["STOPSPELL 50%", "HURT 50% (3-10 damage)"]
 print("tips OK")
+# RetroArch's saves: the newest save state and the battery save, wherever the settings put them
+from companion import retroarch as RA
+home = tempfile.mkdtemp(); exe = os.path.join(home, "retroarch.exe"); open(exe, "w").close()
+def touch(path, when):
+    os.makedirs(os.path.dirname(path), exist_ok=True); open(path, "w").close(); os.utime(path, (when, when))
+with open(os.path.join(home, "retroarch.cfg"), "w") as fh:
+    fh.write('savestate_directory = ":\\states"\nsavefile_directory = "default"\nsavestates_in_content_dir = "false"\n')
+N = "Dragon Warrior (USA)"
+assert RA.save_files(exe, N) == {"states": [], "battery": None} and RA.save_files(exe, "") == {"states": [], "battery": None}
+touch(os.path.join(home, "states", "Mesen", N + ".state"), 1000); touch(os.path.join(home, "states", "Mesen", N + ".state7"), 3000)
+touch(os.path.join(home, "states", "FCEUmm", N + ".state12"), 2000); touch(os.path.join(home, "states", N + ".state.auto"), 500)
+touch(os.path.join(home, "states", "Mesen", N + ".state7.png"), 9000)                    # a thumbnail is not a save
+touch(os.path.join(home, "states", "Mesen", "Dragon Warrior II (USA).state3"), 9000)     # nor is another game's
+touch(os.path.join(home, "saves", "Mesen", N + ".srm"), 2500)
+found = RA.save_files(exe, N)
+assert found["states"] == [(7, 3000.0), (12, 2000.0), (0, 1000.0), ("auto", 500.0)] and found["battery"] == 2500.0
+roms = tempfile.mkdtemp(); touch(os.path.join(roms, N + ".state2"), 4000)
+assert RA.save_files(exe, N, os.path.join(roms, N + ".nes"))["states"][0] == (7, 3000.0)   # not looked for beside the ROM...
+with open(os.path.join(home, "retroarch.cfg"), "w") as fh:
+    fh.write('savestates_in_content_dir = "true"\n')
+assert RA.save_files(exe, N, os.path.join(roms, N + ".nes"))["states"][0] == (2, 4000.0)   # ...unless RetroArch is set to
+from companion.dashboard import App, fmt_time
+assert App.save_text([(7, time.time())]).startswith("Slot 7 · ") and App.save_text([("auto", time.time())]).startswith("Auto save")
+assert App.save_text([]) == "" and P.final_step == "dlord" and P.playthrough({}) is None
+assert P.playthrough({"runs": {"aa-1": {"time": 4000.0, "deaths": 0}}, "last_run": "aa-1"}) == 4000.0
+print("save states and play time OK")
 print("ALL OK")

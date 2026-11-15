@@ -669,6 +669,7 @@ class Overlay:
         self.toasts = []            # achievements waiting to be shown; the first one is on screen
         self._toast_timer = None
         self.popup = Popup(self)
+        self.info = []              # lines the library adds to the stats module (play time, last save)
         self.tips, self._tip_re, self._tip_names = {}, None, None       # what the plugin can explain
         self._fonts = {}            # font description -> Font, for finding the word under the pointer
         self.tipwin = Tip(self)
@@ -893,6 +894,12 @@ class Overlay:
             except self.tk.TclError:
                 pass
 
+    def set_info(self, lines):
+        """Lines from the library for the stats module; redraws only when they change."""
+        if list(lines) != self.info:
+            self.info = list(lines)
+            self.render()
+
     def update(self, conn, state, msg=""):
         self.conn, self.state, self.conn_msg = conn, state, msg
         self.render()
@@ -969,6 +976,7 @@ class Overlay:
             rows = [R("strong", x) for x in (pv.get("stats"),) if x]
             rows += [R("body", x) for x in (pv.get("gear"),) if x]
             rows += [R("meta", x, T.S2 if i == 0 else T.S1) for i, x in enumerate(pv.get("self", ()))]
+            rows += [R("meta", x, T.S2 if i == 0 else T.S1) for i, x in enumerate(self.info)]
         P["hero"].set(pv.get("location", p.title), rows,
                       short=("heart", sh.get("stats") or pv.get("stats") or "", [], None))
 

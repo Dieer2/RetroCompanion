@@ -32,6 +32,7 @@ class GamePlugin:
     memory = ()           # (address, length, required) read every tick
     poll_seconds = 0.4
     steps = ()            # dicts: id, ch (chapter), title, lines; optional: rec, optional, soft, anchor
+    final_step = ""       # id of the step whose completion means the game is beaten ("" = the last step)
 
     # -- data from the player's own copy -------------------------------------------
     def data_status(self):
@@ -81,6 +82,11 @@ class GamePlugin:
     def achieved(self, ach, state, memo):
         """True/False, or (current, total) for a counted achievement."""
         return False
+
+    def playthrough(self, memo):
+        """Seconds played in the adventure the player was last seen in, if the plugin follows
+        adventures apart from each other (memo is the same dict track() gets). None if unknown."""
+        return None
 
     def events(self, state, prev):
         """Short lines for the overlay's log about what changed between prev and state

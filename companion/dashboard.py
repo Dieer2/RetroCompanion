@@ -153,6 +153,9 @@ class App:
         self._moby_err = ""
         self._profile_win = None
         self._ideas = None          # the open ideas window, if any
+        self._saves = {}            # game id -> (looked up at, what RetroArch has saved for it)
+        self._last_save = {}        # game id -> (newest save state, battery save time) seen last
+        self._ra_exe = ra.find_install()
         self._update = None         # a newer release, once the check has found one
         self._upd = None            # the open update window, if any
         self._upd_busy = ""         # "check" or "install" while one of them runs
@@ -285,16 +288,20 @@ class App:
         tiles.pack(fill="x", padx=S6, pady=(S4, 0))
         self.tiles = {}
         for i, (key, label) in enumerate((("progress", "Progress"), ("ach", "Achievements"), ("time", "Play time"),
-                                           ("last", "Last played"), ("seen", "Last seen"))):
+                                           ("last", "Last played"), ("save", "Last save"), ("seen", "Last seen"))):
             f = tk.Frame(tiles, bg=T.CARD, highlightthickness=1, highlightbackground=T.hair(T.CARD))
             f.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else S2, 0))
             tiles.grid_columnconfigure(i, weight=3 if key == "seen" else 2, uniform="t")
             tk.Label(f, text=label, bg=T.CARD, fg=T.MUTED, font=(T.FONT, 9), anchor="w").pack(fill="x", padx=S3, pady=(S3, 0))
-            v = tk.Label(f, text="", bg=T.CARD, fg=T.TEXT, font=(T.MONO, 11) if key != "seen" else (T.FONT, 11),
+            v = tk.Label(f, text="", bg=T.CARD, fg=T.TEXT, font=(T.MONO, 10) if key != "seen" else (T.FONT, 11),
                          anchor="nw", justify="left", wraplength=120)
-            v.pack(fill="both", expand=True, padx=S3, pady=(2, S3))
-            f.bind("<Configure>", lambda e, v=v: v.configure(wraplength=max(60, e.width - 2 * T.S3 - 12)))
+            v.pack(fill="x", padx=S3, pady=(2, 0))
+            sub = tk.Label(f, text="", bg=T.CARD, fg=T.MUTED, font=(T.FONT, 9), anchor="nw", justify="left", wraplength=120)
+            sub.pack(fill="both", expand=True, padx=S3, pady=(2, S3))       # a second, quieter line
+            f.bind("<Configure>", lambda e, v=v, sub=sub: (v.configure(wraplength=max(60, e.width - 2 * T.S3 - 2)),
+                                                           sub.configure(wraplength=max(60, e.width - 2 * T.S3 - 2))))
             self.tiles[key] = v
+            self.tiles[key + "_sub"] = sub
         self.pbar = tk.Canvas(main, height=4, bg=T.RAISED, highlightthickness=0)
         self.pbar.pack(fill="x", padx=S6, pady=(S3, 0))
         self.pbar.bind("<Configure>", lambda e: self.draw_pbar())
@@ -389,14 +396,16 @@ class App:
         running = self.live_pid == p.id
         done = tuple(pr.is_done(i) for i in range(len(p.steps)))
         ach = self.ach[p.id]
+        saves = self.saves_of(p.id)
         sig = (p.id, conn, running, done, pr.current(), gs.get("rom"), int(gs.get("playtime", 0)) // 30,
+               saves["states"][:1], saves["battery"], int(self.total_playtime()) // 60, (gs.get("beaten") or {}).get("time"),
                gs.get("summary"), self.message, self.overlay_pid, self.tab, ach.signature(),
                (gs.get("moby") or {}).get("fetched"), self._moby_busy, self._moby_err)
         if sig == self._sig and not force:
             return
-        rebuild = (force or self._sig is None or any(self._sig[i] != sig[i] for i in (0, 3, 4, 10))
-                   or (self.tab == "ach" and self._sig[11] != sig[11])
-                   or (self.tab == "about" and self._sig[12:] != sig[12:]))
+        rebuild = (force or self._sig is None or any(self._sig[i] != sig[i] for i in (0, 3, 4, 14))
+                   or (self.tab == "ach" and self._sig[15] != sig[15])
+                   or (self.tab == "about" and self._sig[16:] != sig[16:]))
         self._sig = sig
         if self.tab == "walk":
             self.reset_btn.pack(side="right")
@@ -411,7 +420,8 @@ class App:
         acc = self.account.s
         who = ("Signed in as %s%s" % (acc.get("name", ""), " · rank %d" % acc["rank"] if acc.get("rank") else "")
                if self.account.signed_in else "Not signed in: trophies stay on this computer")
-        self.prof_sub.configure(text="%d points to spend\n%s\n%s" % (pf.balance(), self.trophy_line(), who))
+        self.prof_sub.configure(text="%d points to spend\n%s\nPlayed %s in all games\n%s" % (
+            pf.balance(), self.trophy_line(), fmt_time(self.total_playtime()), who))
         into, span = pf.level_progress()
         self.prof_bar.update_idletasks()
         self.prof_bar.delete("all")
@@ -435,6 +445,13 @@ class App:
         self.ov_btn.configure(text="Close overlay" if self.overlay_pid == p.id else "Open overlay")
         self.tiles["progress"].configure(text="%d / %d" % (sum(done), len(p.steps)))
         self.tiles["time"].configure(text=fmt_time(gs.get("playtime")))
+        self.tiles["time_sub"].configure(text="\n".join(self.time_notes(p.id)))
+        newest = saves["states"][0] if saves["states"] else None
+        self.tiles["save"].configure(text="None yet" if not newest else
+                                     ("Auto save" if newest[0] == "auto" else "Slot %d" % newest[0]))
+        self.tiles["save_sub"].configure(text="\n".join(
+            ([fmt_when(newest[1])] if newest else ["No save state of RetroArch"])
+            + (["in the game: %s" % fmt_when(saves["battery"])] if saves["battery"] else [])))
         self.tiles["last"].configure(text=fmt_when(gs.get("last_played")))
         self.tiles["seen"].configure(text=gs.get("summary") or "Nothing yet")
         rom = gs.get("rom")
@@ -445,6 +462,75 @@ class App:
         self.draw_pbar()
         if rebuild:
             {"ach": self.fill_achievements, "about": self.fill_about}.get(self.tab, self.fill_walkthrough)()
+
+    # -- play time and saves -------------------------------------------------------------
+    def total_playtime(self):
+        return sum(g.get("playtime", 0) for g in self.store.data["games"].values() if isinstance(g, dict))
+
+    def time_notes(self, pid):
+        """What else there is to say about a game's play time: the time it was beaten in, the adventure in hand."""
+        gs, out = self.store.game(pid), []
+        if (gs.get("beaten") or {}).get("time"):
+            out.append("beaten in %s" % fmt_time(gs["beaten"]["time"]))
+        try:
+            run = self.by_id[pid].playthrough(gs.get("ach_memo") or {})
+        except Exception:
+            run = None
+        if run:
+            out.append("this adventure %s" % fmt_time(run))
+        return out
+
+    @staticmethod
+    def save_text(states):
+        if not states:
+            return ""
+        slot, when = states[0]
+        return "%s · %s" % ("Auto save" if slot == "auto" else "Slot %d" % slot, fmt_when(when))
+
+    def saves_of(self, pid):
+        """RetroArch's save states and battery save of a game, looked up at most every two seconds."""
+        now = time.time()
+        hit = self._saves.get(pid)
+        if hit and now - hit[0] < 2.0:
+            return hit[1]
+        gs = self.store.game(pid)
+        rom = gs.get("rom") or ""
+        st = self.status
+        name = st["name"] if (st and self.live_pid == pid and st.get("name")) else os.path.splitext(os.path.basename(rom))[0]
+        try:
+            exe = self.store.settings.get("retroarch") or self._ra_exe
+            found = ra.save_files(exe, name, rom) if exe else {"states": [], "battery": None}
+        except Exception:                       # a folder that cannot be read must not stop the library
+            found = {"states": [], "battery": None}
+        self._saves[pid] = (now, found)
+        return found
+
+    def watch_saves(self):
+        """While a game runs: note a new save in its log and keep the overlay's lines up to date."""
+        pid = self.live_pid
+        if not pid:
+            return
+        gs, found = self.store.game(pid), self.saves_of(pid)
+        newest = (found["states"][0] if found["states"] else None, found["battery"])
+        was = self._last_save.get(pid)
+        self._last_save[pid] = newest
+        if was is not None and was != newest:
+            log, now = gs.setdefault("log", []), time.time()
+            if newest[0] and newest[0] != was[0]:
+                slot = newest[0][0]
+                log.append([now, "Saved a state: %s" % ("auto save" if slot == "auto" else "slot %d" % slot)])
+            if newest[1] and newest[1] != was[1]:
+                log.append([now, "Saved in the game"])
+            del log[:-LOG_KEEP]
+            self.dirty = True
+        if self.overlay and self.overlay_pid == pid:
+            lines = ["Play time %s%s · all games %s" % (
+                fmt_time(gs.get("playtime")), "".join(" · " + n for n in self.time_notes(pid)), fmt_time(self.total_playtime()))]
+            if found["states"]:
+                lines.append("Last save state: %s" % self.save_text(found["states"][:1]).lower().replace(" · ", ", "))
+            if found["battery"]:
+                lines.append("Last in-game save: %s" % fmt_when(found["battery"]))
+            self.overlay.set_info(lines)
 
     def trophy_line(self):
         t = self.profile.trophies()
@@ -1611,6 +1697,9 @@ class App:
             for i, s in enumerate(p.steps):
                 if not was[i] and pr.is_done(i):
                     log.append([now, "Step %d done: %s" % (i + 1, s["title"])])
+                    if s["id"] == (p.final_step or p.steps[-1]["id"]) and not gs.get("beaten"):
+                        gs["beaten"] = {"time": gs.get("playtime", 0), "when": now}     # the first time only
+                        log.append([now, "Game beaten in %s of play" % fmt_time(gs["beaten"]["time"])])
             try:
                 for text in p.events(state, self._prev.get(pid)) or ():
                     log.append([now, str(text)])
@@ -1669,6 +1758,7 @@ class App:
                     self.on_download(*ev[1:])
         except queue.Empty:
             pass
+        self.watch_saves()
         self.refresh()
         if self.dirty and time.time() - self.last_save > 15:
             self.store.save()
